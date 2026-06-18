@@ -1,0 +1,608 @@
+{
+  "active-speaker-detection": [
+    "nvidia/nvidia/active-speaker-detection"
+  ],
+  "bevformer": [
+    "nvidia/nvidia/bevformer"
+  ],
+  "bge-m3": [
+    "nvidia/baai/bge-m3"
+  ],
+  "big-pickle": [
+    "opencode/big-pickle"
+  ],
+  "codestral-latest": [
+    "mistral/codestral-latest"
+  ],
+  "cosmos-predict1-5b": [
+    "nvidia/nvidia/cosmos-predict1-5b"
+  ],
+  "cosmos-transfer1-7b": [
+    "nvidia/nvidia/cosmos-transfer1-7b"
+  ],
+  "cosmos-transfer2_5-2b": [
+    "nvidia/nvidia/cosmos-transfer2_5-2b"
+  ],
+  "deepseek-chat": [
+    "deepseek/deepseek-chat"
+  ],
+  "deepseek-r1-0528": [
+    "huggingface/deepseek-ai/DeepSeek-R1-0528"
+  ],
+  "deepseek-reasoner": [
+    "deepseek/deepseek-reasoner"
+  ],
+  "deepseek-v3.1:671b": [
+    "ollama-cloud/deepseek-v3.1:671b"
+  ],
+  "deepseek-v3.2": [
+    "huggingface/deepseek-ai/DeepSeek-V3.2",
+    "ollama-cloud/deepseek-v3.2"
+  ],
+  "deepseek-v4-flash": [
+    "deepseek/deepseek-v4-flash",
+    "nvidia/deepseek-ai/deepseek-v4-flash",
+    "ollama-cloud/deepseek-v4-flash",
+    "opencode/deepseek-v4-flash-free",
+    "opencode-go/deepseek-v4-flash"
+  ],
+  "deepseek-v4-pro": [
+    "deepseek/deepseek-v4-pro",
+    "huggingface/deepseek-ai/DeepSeek-V4-Pro",
+    "nvidia/deepseek-ai/deepseek-v4-pro",
+    "ollama-cloud/deepseek-v4-pro",
+    "opencode-go/deepseek-v4-pro"
+  ],
+  "devstral-2:123b": [
+    "ollama-cloud/devstral-2:123b"
+  ],
+  "devstral-small-2:24b": [
+    "ollama-cloud/devstral-small-2:24b"
+  ],
+  "dracarys-llama-3_1-70b-instruct": [
+    "nvidia/abacusai/dracarys-llama-3_1-70b-instruct"
+  ],
+  "esm2-650m": [
+    "nvidia/meta/esm2-650m"
+  ],
+  "esmfold": [
+    "nvidia/meta/esmfold"
+  ],
+  "flux.1-dev": [
+    "nvidia/black-forest-labs/flux.1-dev"
+  ],
+  "flux_1-kontext-dev": [
+    "nvidia/black-forest-labs/flux_1-kontext-dev"
+  ],
+  "flux_1-schnell": [
+    "nvidia/black-forest-labs/flux_1-schnell"
+  ],
+  "flux_2-klein-4b": [
+    "nvidia/black-forest-labs/flux_2-klein-4b"
+  ],
+  "gemini-3-flash": [
+    "opencode/gemini-3-flash"
+  ],
+  "gemini-3-flash-preview": [
+    "ollama-cloud/gemini-3-flash-preview"
+  ],
+  "gemini-3.1-pro": [
+    "opencode/gemini-3.1-pro"
+  ],
+  "gemini-3.5-flash": [
+    "opencode/gemini-3.5-flash"
+  ],
+  "gemma-2-2b-it": [
+    "nvidia/google/gemma-2-2b-it"
+  ],
+  "gemma-3n-e2b-it": [
+    "nvidia/google/gemma-3n-e2b-it"
+  ],
+  "gemma-3n-e4b-it": [
+    "nvidia/google/gemma-3n-e4b-it"
+  ],
+  "gemma-4-31b-it": [
+    "nvidia/google/gemma-4-31b-it",
+    "openrouter/google/gemma-4-31b-it:free"
+  ],
+  "gemma3:12b": [
+    "ollama-cloud/gemma3:12b"
+  ],
+  "gemma3:27b": [
+    "ollama-cloud/gemma3:27b"
+  ],
+  "gemma3:4b": [
+    "ollama-cloud/gemma3:4b"
+  ],
+  "gemma4:31b": [
+    "ollama-cloud/gemma4:31b"
+  ],
+  "gliner-pii": [
+    "nvidia/nvidia/gliner-pii"
+  ],
+  "glm-4.5-air": [
+    "zai-coding-plan/glm-4.5-air"
+  ],
+  "glm-4.6v": [
+    "z.ai/zai-coding-plan/glm-4.6v"
+  ],
+  "glm-4.7": [
+    "huggingface/zai-org/GLM-4.7",
+    "ollama-cloud/glm-4.7",
+    "zai-coding-plan/glm-4.7"
+  ],
+  "glm-4.7-flash": [
+    "huggingface/zai-org/GLM-4.7-Flash"
+  ],
+  "glm-5": [
+    "huggingface/zai-org/GLM-5",
+    "ollama-cloud/glm-5",
+    "z.ai/zai-coding-plan/glm-5"
+  ],
+  "glm-5-turbo": [
+    "zai-coding-plan/glm-5-turbo"
+  ],
+  "glm-5.1": [
+    "huggingface/zai-org/GLM-5.1",
+    "nvidia/z-ai/glm-5.1",
+    "ollama-cloud/glm-5.1",
+    "opencode-go/glm-5.1",
+    "zai-coding-plan/glm-5.1"
+  ],
+  "glm-5.2": [
+    "ollama-cloud/glm-5.2",
+    "opencode-go/glm-5.2",
+    "zai-coding-plan/glm-5.2"
+  ],
+  "glm-5v-turbo": [
+    "zai-coding-plan/glm-5v-turbo"
+  ],
+  "google-paligemma": [
+    "nvidia/google/google-paligemma"
+  ],
+  "gpt-5.2": [
+    "openai/gpt-5.2"
+  ],
+  "gpt-5.3-codex": [
+    "openai/gpt-5.3-codex"
+  ],
+  "gpt-5.3-codex-spark": [
+    "openai/gpt-5.3-codex-spark"
+  ],
+  "gpt-5.4": [
+    "openai/gpt-5.4"
+  ],
+  "gpt-5.4-fast": [
+    "openai/gpt-5.4-fast"
+  ],
+  "gpt-5.4-mini": [
+    "openai/gpt-5.4-mini"
+  ],
+  "gpt-5.4-mini-fast": [
+    "openai/gpt-5.4-mini-fast"
+  ],
+  "gpt-5.5": [
+    "openai/gpt-5.5"
+  ],
+  "gpt-5.5-fast": [
+    "openai/gpt-5.5-fast"
+  ],
+  "gpt-5.5-pro": [
+    "openai/gpt-5.5-pro"
+  ],
+  "gpt-oss-120b": [
+    "nvidia/openai/gpt-oss-120b",
+    "openrouter/openai/gpt-oss-120b:free"
+  ],
+  "gpt-oss-20b": [
+    "nvidia/openai/gpt-oss-20b",
+    "openrouter/openai/gpt-oss-20b:free"
+  ],
+  "gpt-oss:120b": [
+    "ollama-cloud/gpt-oss:120b"
+  ],
+  "gpt-oss:20b": [
+    "ollama-cloud/gpt-oss:20b"
+  ],
+  "k2p5": [
+    "kimi-for-coding/k2p5",
+    "kimi/kimi-for-coding/k2p5"
+  ],
+  "k2p6": [
+    "kimi-for-coding/k2p6"
+  ],
+  "k2p7": [
+    "kimi-for-coding/k2p7",
+    "kimi/kimi-for-coding/k2p7"
+  ],
+  "kimi-k2-instruct": [
+    "huggingface/moonshotai/Kimi-K2-Instruct"
+  ],
+  "kimi-k2-instruct-0905": [
+    "huggingface/moonshotai/Kimi-K2-Instruct-0905",
+    "nvidia/moonshotai/kimi-k2-instruct-0905"
+  ],
+  "kimi-k2-thinking": [
+    "huggingface/moonshotai/Kimi-K2-Thinking",
+    "kimi-for-coding/kimi-k2-thinking"
+  ],
+  "kimi-k2.5": [
+    "huggingface/moonshotai/Kimi-K2.5",
+    "ollama-cloud/kimi-k2.5"
+  ],
+  "kimi-k2.6": [
+    "huggingface/moonshotai/Kimi-K2.6",
+    "nvidia/moonshotai/kimi-k2.6",
+    "ollama-cloud/kimi-k2.6",
+    "opencode-go/kimi-k2.6"
+  ],
+  "kimi-k2.7-code": [
+    "ollama-cloud/kimi-k2.7-code",
+    "opencode-go/kimi-k2.7-code"
+  ],
+  "llama-3.1-70b-instruct": [
+    "nvidia/meta/llama-3.1-70b-instruct"
+  ],
+  "llama-3.1-8b-instruct": [
+    "nvidia/meta/llama-3.1-8b-instruct"
+  ],
+  "llama-3.2-11b-vision-instruct": [
+    "nvidia/meta/llama-3.2-11b-vision-instruct"
+  ],
+  "llama-3.2-1b-instruct": [
+    "nvidia/meta/llama-3.2-1b-instruct"
+  ],
+  "llama-3.2-3b-instruct": [
+    "nvidia/meta/llama-3.2-3b-instruct",
+    "openrouter/meta-llama/llama-3.2-3b-instruct:free"
+  ],
+  "llama-3.2-90b-vision-instruct": [
+    "nvidia/meta/llama-3.2-90b-vision-instruct"
+  ],
+  "llama-3.3-70b-instruct": [
+    "nvidia/meta/llama-3.3-70b-instruct",
+    "openrouter/meta-llama/llama-3.3-70b-instruct:free"
+  ],
+  "llama-3_1-nemotron-safety-guard-8b-v3": [
+    "nvidia/nvidia/llama-3_1-nemotron-safety-guard-8b-v3"
+  ],
+  "llama-3_2-nemoretriever-300m-embed-v1": [
+    "nvidia/nvidia/llama-3_2-nemoretriever-300m-embed-v1"
+  ],
+  "llama-4-maverick-17b-128e-instruct": [
+    "nvidia/meta/llama-4-maverick-17b-128e-instruct"
+  ],
+  "llama-guard-4-12b": [
+    "nvidia/meta/llama-guard-4-12b"
+  ],
+  "llama-nemotron-embed-vl-1b-v2": [
+    "nvidia/nvidia/llama-nemotron-embed-vl-1b-v2"
+  ],
+  "llama-nemotron-rerank-vl-1b-v2": [
+    "nvidia/nvidia/llama-nemotron-rerank-vl-1b-v2"
+  ],
+  "magistral-medium-latest": [
+    "mistral/magistral-medium-latest"
+  ],
+  "magistral-small": [
+    "mistral/magistral-small"
+  ],
+  "magistral-small-2506": [
+    "nvidia/mistralai/magistral-small-2506"
+  ],
+  "magpie-tts-zeroshot": [
+    "nvidia/nvidia/magpie-tts-zeroshot"
+  ],
+  "mimo-v2-flash": [
+    "huggingface/XiaomiMiMo/MiMo-V2-Flash"
+  ],
+  "mimo-v2.5": [
+    "opencode-go/mimo-v2.5"
+  ],
+  "mimo-v2.5-free": [
+    "opencode/mimo-v2.5-free"
+  ],
+  "mimo-v2.5-pro": [
+    "opencode-go/mimo-v2.5-pro"
+  ],
+  "minimax-m2.1": [
+    "huggingface/MiniMaxAI/MiniMax-M2.1",
+    "ollama-cloud/minimax-m2.1"
+  ],
+  "minimax-m2.5": [
+    "huggingface/MiniMaxAI/MiniMax-M2.5",
+    "ollama-cloud/minimax-m2.5"
+  ],
+  "minimax-m2.7": [
+    "huggingface/MiniMaxAI/MiniMax-M2.7",
+    "nvidia/minimaxai/minimax-m2.7",
+    "ollama-cloud/minimax-m2.7",
+    "opencode-go/minimax-m2.7"
+  ],
+  "minimax-m3": [
+    "ollama-cloud/minimax-m3",
+    "opencode-go/minimax-m3"
+  ],
+  "ministral-3:14b": [
+    "ollama-cloud/ministral-3:14b"
+  ],
+  "ministral-3:3b": [
+    "ollama-cloud/ministral-3:3b"
+  ],
+  "ministral-3:8b": [
+    "ollama-cloud/ministral-3:8b"
+  ],
+  "ministral-3b-latest": [
+    "mistral/ministral-3b-latest"
+  ],
+  "ministral-8b-latest": [
+    "mistral/ministral-8b-latest"
+  ],
+  "mistral-7b-instruct-v03": [
+    "nvidia/mistralai/mistral-7b-instruct-v03"
+  ],
+  "mistral-embed": [
+    "mistral/mistral-embed"
+  ],
+  "mistral-large-2411": [
+    "mistral/mistral-large-2411"
+  ],
+  "mistral-large-2512": [
+    "mistral/mistral-large-2512"
+  ],
+  "mistral-large-3-675b-instruct-2512": [
+    "nvidia/mistralai/mistral-large-3-675b-instruct-2512"
+  ],
+  "mistral-large-3:675b": [
+    "ollama-cloud/mistral-large-3:675b"
+  ],
+  "mistral-large-latest": [
+    "mistral/mistral-large-latest"
+  ],
+  "mistral-medium-2505": [
+    "mistral/mistral-medium-2505"
+  ],
+  "mistral-medium-2508": [
+    "mistral/mistral-medium-2508"
+  ],
+  "mistral-medium-2604": [
+    "mistral/mistral-medium-2604"
+  ],
+  "mistral-medium-3-instruct": [
+    "nvidia/mistralai/mistral-medium-3-instruct"
+  ],
+  "mistral-medium-latest": [
+    "mistral/mistral-medium-latest"
+  ],
+  "mistral-nemo": [
+    "mistral/mistral-nemo"
+  ],
+  "mistral-nemotron": [
+    "nvidia/mistralai/mistral-nemotron"
+  ],
+  "mistral-small-2506": [
+    "mistral/mistral-small-2506"
+  ],
+  "mistral-small-2603": [
+    "mistral/mistral-small-2603"
+  ],
+  "mistral-small-4-119b-2603": [
+    "nvidia/mistralai/mistral-small-4-119b-2603"
+  ],
+  "mistral-small-latest": [
+    "mistral/mistral-small-latest"
+  ],
+  "mixtral-8x22b-instruct": [
+    "nvidia/mistralai/mixtral-8x22b-instruct"
+  ],
+  "mixtral-8x7b-instruct": [
+    "nvidia/mistralai/mixtral-8x7b-instruct"
+  ],
+  "nemotron-3-content-safety": [
+    "nvidia/nvidia/nemotron-3-content-safety"
+  ],
+  "nemotron-3-nano-30b-a3b": [
+    "nvidia/nvidia/nemotron-3-nano-30b-a3b",
+    "openrouter/nvidia/nemotron-3-nano-30b-a3b:free"
+  ],
+  "nemotron-3-nano-omni-30b-a3b-reasoning": [
+    "nvidia/nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+    "openrouter/nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"
+  ],
+  "nemotron-3-nano:30b": [
+    "ollama-cloud/nemotron-3-nano:30b"
+  ],
+  "nemotron-3-super": [
+    "ollama-cloud/nemotron-3-super"
+  ],
+  "nemotron-3-super-120b-a12b": [
+    "nvidia/nvidia/nemotron-3-super-120b-a12b",
+    "openrouter/nvidia/nemotron-3-super-120b-a12b:free"
+  ],
+  "nemotron-3-ultra": [
+    "ollama-cloud/nemotron-3-ultra"
+  ],
+  "nemotron-3-ultra-550b-a55b": [
+    "nvidia/nvidia/nemotron-3-ultra-550b-a55b",
+    "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free"
+  ],
+  "nemotron-3-ultra-free": [
+    "opencode/nemotron-3-ultra-free"
+  ],
+  "nemotron-content-safety-reasoning-4b": [
+    "nvidia/nvidia/nemotron-content-safety-reasoning-4b"
+  ],
+  "nemotron-mini-4b-instruct": [
+    "nvidia/nvidia/nemotron-mini-4b-instruct"
+  ],
+  "nemotron-voicechat": [
+    "nvidia/nvidia/nemotron-voicechat"
+  ],
+  "nv-embed-v1": [
+    "nvidia/nvidia/nv-embed-v1"
+  ],
+  "nv-embedcode-7b-v1": [
+    "nvidia/nvidia/nv-embedcode-7b-v1"
+  ],
+  "nvidia-nemotron-nano-9b-v2": [
+    "nvidia/nvidia/nvidia-nemotron-nano-9b-v2",
+    "openrouter/nvidia/nemotron-nano-9b-v2:free"
+  ],
+  "open-mistral-7b": [
+    "mistral/open-mistral-7b"
+  ],
+  "open-mixtral-8x22b": [
+    "mistral/open-mixtral-8x22b"
+  ],
+  "open-mixtral-8x7b": [
+    "mistral/open-mixtral-8x7b"
+  ],
+  "phi-4-mini-instruct": [
+    "nvidia/microsoft/phi-4-mini-instruct"
+  ],
+  "phi-4-multimodal-instruct": [
+    "nvidia/microsoft/phi-4-multimodal-instruct"
+  ],
+  "pixtral-12b": [
+    "mistral/pixtral-12b"
+  ],
+  "pixtral-large-latest": [
+    "mistral/pixtral-large-latest"
+  ],
+  "qwen-image": [
+    "nvidia/qwen/qwen-image"
+  ],
+  "qwen-image-edit": [
+    "nvidia/qwen/qwen-image-edit"
+  ],
+  "qwen2.5-coder-32b-instruct": [
+    "nvidia/qwen/qwen2.5-coder-32b-instruct"
+  ],
+  "qwen3-235b-a22b-thinking-2507": [
+    "huggingface/Qwen/Qwen3-235B-A22B-Thinking-2507"
+  ],
+  "qwen3-coder-480b-a35b-instruct": [
+    "huggingface/Qwen/Qwen3-Coder-480B-A35B-Instruct",
+    "nvidia/qwen/qwen3-coder-480b-a35b-instruct",
+    "openrouter/qwen/qwen3-coder:free"
+  ],
+  "qwen3-coder-next": [
+    "huggingface/Qwen/Qwen3-Coder-Next",
+    "ollama-cloud/qwen3-coder-next"
+  ],
+  "qwen3-coder:480b": [
+    "ollama-cloud/qwen3-coder:480b"
+  ],
+  "qwen3-embedding-4b": [
+    "huggingface/Qwen/Qwen3-Embedding-4B"
+  ],
+  "qwen3-embedding-8b": [
+    "huggingface/Qwen/Qwen3-Embedding-8B"
+  ],
+  "qwen3-next-80b-a3b-instruct": [
+    "huggingface/Qwen/Qwen3-Next-80B-A3B-Instruct",
+    "nvidia/qwen/qwen3-next-80b-a3b-instruct",
+    "openrouter/qwen/qwen3-next-80b-a3b-instruct:free"
+  ],
+  "qwen3-next-80b-a3b-thinking": [
+    "huggingface/Qwen/Qwen3-Next-80B-A3B-Thinking"
+  ],
+  "qwen3.5-122b-a10b": [
+    "nvidia/qwen/qwen3.5-122b-a10b"
+  ],
+  "qwen3.5-397b-a17b": [
+    "huggingface/Qwen/Qwen3.5-397B-A17B",
+    "nvidia/qwen/qwen3.5-397b-a17b"
+  ],
+  "qwen3.5:397b": [
+    "ollama-cloud/qwen3.5:397b"
+  ],
+  "qwen3.6-plus": [
+    "opencode-go/qwen3.6-plus"
+  ],
+  "qwen3.7-max": [
+    "opencode-go/qwen3.7-max"
+  ],
+  "qwen3.7-plus": [
+    "opencode-go/qwen3.7-plus"
+  ],
+  "rerank-qa-mistral-4b": [
+    "nvidia/nvidia/rerank-qa-mistral-4b"
+  ],
+  "riva-translate-4b-instruct-v1_1": [
+    "nvidia/nvidia/riva-translate-4b-instruct-v1_1"
+  ],
+  "rnj-1:8b": [
+    "ollama-cloud/rnj-1:8b"
+  ],
+  "sarvam-m": [
+    "nvidia/sarvamai/sarvam-m"
+  ],
+  "seed-oss-36b-instruct": [
+    "nvidia/bytedance/seed-oss-36b-instruct"
+  ],
+  "solar-10_7b-instruct": [
+    "nvidia/upstage/solar-10_7b-instruct"
+  ],
+  "sparsedrive": [
+    "nvidia/nvidia/sparsedrive"
+  ],
+  "step-3.5-flash": [
+    "nvidia/stepfun-ai/step-3.5-flash"
+  ],
+  "step-3.7-flash": [
+    "nvidia/stepfun-ai/step-3.7-flash"
+  ],
+  "streampetr": [
+    "nvidia/nvidia/streampetr"
+  ],
+  "studiovoice": [
+    "nvidia/nvidia/studiovoice"
+  ],
+  "synthetic-video-detector": [
+    "nvidia/nvidia/synthetic-video-detector"
+  ],
+  "usdcode": [
+    "nvidia/nvidia/usdcode"
+  ],
+  "usdvalidate": [
+    "nvidia/nvidia/usdvalidate"
+  ],
+  "whisper-large-v3": [
+    "nvidia/openai/whisper-large-v3"
+  ],
+  "north-mini-code": [
+    "opencode/north-mini-code-free",
+    "openrouter/cohere/north-mini-code:free"
+  ],
+  "dolphin-mistral-24b-venice-edition": [
+    "openrouter/cognitivecomputations/dolphin-mistral-24b-venice-edition:free"
+  ],
+  "gemma-4-26b-a4b-it": [
+    "openrouter/google/gemma-4-26b-a4b-it:free"
+  ],
+  "lfm-2.5-1.2b-instruct": [
+    "openrouter/liquid/lfm-2.5-1.2b-instruct:free"
+  ],
+  "lfm-2.5-1.2b-thinking": [
+    "openrouter/liquid/lfm-2.5-1.2b-thinking:free"
+  ],
+  "nex-n2-pro": [
+    "openrouter/nex-agi/nex-n2-pro:free"
+  ],
+  "hermes-3-llama-3.1-405b": [
+    "openrouter/nousresearch/hermes-3-llama-3.1-405b:free"
+  ],
+  "nemotron-3.5-content-safety": [
+    "openrouter/nvidia/nemotron-3.5-content-safety:free"
+  ],
+  "nemotron-nano-12b-v2-vl": [
+    "openrouter/nvidia/nemotron-nano-12b-v2-vl:free"
+  ],
+  "laguna-m.1": [
+    "openrouter/poolside/laguna-m.1:free"
+  ],
+  "laguna-xs.2": [
+    "openrouter/poolside/laguna-xs.2:free"
+  ]
+}
