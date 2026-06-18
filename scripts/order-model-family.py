@@ -46,7 +46,7 @@ def provider(model_id: str) -> str:
 
 
 def is_free(model_id: str) -> bool:
-    return model_id.endswith(":free") or model_id in FREE_MODELS or provider(model_id) in FREE_PROVIDERS
+    return model_id.endswith(":free") or model_id.endswith("-free") or model_id in FREE_MODELS or provider(model_id) in FREE_PROVIDERS
 
 
 def load_models() -> dict[str, list[str]]:

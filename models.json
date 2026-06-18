@@ -150,7 +150,6 @@
     "zai-coding-plan/glm-5.1"
   ],
   "glm-5.2": [
-    "ollama-cloud/glm-5.2",
     "opencode-go/glm-5.2",
     "zai-coding-plan/glm-5.2"
   ],
@@ -172,20 +171,11 @@
   "gpt-5.4": [
     "openai/gpt-5.4"
   ],
-  "gpt-5.4-fast": [
-    "openai/gpt-5.4-fast"
-  ],
   "gpt-5.4-mini": [
     "openai/gpt-5.4-mini"
   ],
-  "gpt-5.4-mini-fast": [
-    "openai/gpt-5.4-mini-fast"
-  ],
   "gpt-5.5": [
     "openai/gpt-5.5"
-  ],
-  "gpt-5.5-fast": [
-    "openai/gpt-5.5-fast"
   ],
   "gpt-5.5-pro": [
     "openai/gpt-5.5-pro"
@@ -604,5 +594,53 @@
   ],
   "laguna-xs.2": [
     "openrouter/poolside/laguna-xs.2:free"
+  ],
+  "omos-maestria-orchestrator": [
+    "omniroute/omos-maestria-orchestrator"
+  ],
+  "omos-maestria-oracle": [
+    "omniroute/omos-maestria-oracle"
+  ],
+  "omos-maestria-council": [
+    "omniroute/omos-maestria-council"
+  ],
+  "omos-maestria-librarian": [
+    "omniroute/omos-maestria-librarian"
+  ],
+  "omos-maestria-explorer": [
+    "omniroute/omos-maestria-explorer"
+  ],
+  "omos-maestria-designer": [
+    "omniroute/omos-maestria-designer"
+  ],
+  "omos-maestria-fixer": [
+    "omniroute/omos-maestria-fixer"
+  ],
+  "omos-maestria-fast-generic": [
+    "omniroute/omos-maestria-fast-generic"
+  ],
+  "omos-sota-orchestrator": [
+    "omniroute/omos-sota-orchestrator"
+  ],
+  "omos-sota-oracle": [
+    "omniroute/omos-sota-oracle"
+  ],
+  "omos-sota-council": [
+    "omniroute/omos-sota-council"
+  ],
+  "omos-sota-librarian": [
+    "omniroute/omos-sota-librarian"
+  ],
+  "omos-sota-explorer": [
+    "omniroute/omos-sota-explorer"
+  ],
+  "omos-sota-designer": [
+    "omniroute/omos-sota-designer"
+  ],
+  "omos-sota-fixer": [
+    "omniroute/omos-sota-fixer"
+  ],
+  "omos-sota-fast-generic": [
+    "omniroute/omos-sota-fast-generic"
   ]
 }

@@ -53,6 +53,11 @@ All models from these providers are free-tier:
 - `ollama-cloud`
 - `openrouter`
 
+### Restricted Providers
+
+- `opencode-zen` only allows `-free` models in this project.
+- Do not use non-`-free` `opencode-zen` model IDs in presets, OmniRoute combos, or generated chains.
+
 ### OpenRouter Free-Tier Routes
 
 OpenRouter models use the `:free` suffix convention:
