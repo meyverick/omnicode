@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 import { execSync } from "node:child_process";
+import { realpathSync } from "node:fs";
 import { join } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 
 import { commandExists } from "../installer/lib.js";
 
@@ -90,7 +91,16 @@ function main() {
   }
 }
 
-const isMain = import.meta.url === pathToFileURL(process.argv[1] || "").href;
-if (isMain) {
+function isMainModule() {
+  const entry = process.argv[1];
+  if (!entry) return false;
+  try {
+    return realpathSync(entry) === fileURLToPath(import.meta.url);
+  } catch {
+    return false;
+  }
+}
+
+if (isMainModule()) {
   main();
 }
