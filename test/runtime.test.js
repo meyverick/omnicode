@@ -21,4 +21,12 @@ describe("omnicode-runtime.sh", () => {
     assert.ok(script.includes("opencode -s"));
     assert.ok(script.includes(".opencode/session.id"));
   });
+
+  it("conditionally runs graymatter and openspec", () => {
+    const script = readFileSync(runtimePath, "utf8");
+    assert.ok(script.includes("if command -v graymatter"));
+    assert.ok(script.includes("if command -v openspec"));
+    assert.ok(script.includes("graymatter not found; skipping"));
+    assert.ok(script.includes("openspec not found; skipping"));
+  });
 });

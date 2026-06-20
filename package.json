@@ -7,8 +7,6 @@
     "omnicode": "src/bin/omnicode.js"
   },
   "scripts": {
-    "postinstall": "node src/installer/install.js",
-    "preuninstall": "node -e \"console.log('[omnicode] Uninstalling omnicode. Note: OmniRoute, opencode-omniroute-auth, GrayMatter, OpenSpec, and your OpenCode config remain installed and must be removed manually if desired.')\"",
     "test": "node --test test/**/*.test.js"
   },
   "files": [

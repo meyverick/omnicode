@@ -4,16 +4,13 @@
 
 When you run `omnicode`, the npm-managed `src/bin/omnicode.js` entrypoint:
 
-1. Confirms the platform is Ubuntu Linux on AMD64.
-2. Runs the install remediation logic in `src/installer/lib.js`.
-3. Ensures `opencode-omniroute-auth` is present in `~/.config/opencode/opencode.jsonc` without removing unrelated config.
-4. Warns if the global npm bin directory is not on `PATH`.
-5. Delegates to `src/bin/omnicode-runtime.sh` for process lifecycle management.
+1. Verifies that `opencode` and `omniroute` are on `PATH`; exits with an error if either is missing.
+2. Delegates to `src/bin/omnicode-runtime.sh` for process lifecycle management.
 
 The Bash runtime wrapper then:
 
-1. Runs `graymatter init --only opencode`.
-2. Runs `openspec init --force --tools opencode`.
+1. Runs `graymatter init --only opencode` if GrayMatter is installed; prints a warning otherwise.
+2. Runs `openspec init --force --tools opencode` if OpenSpec is installed; prints a warning otherwise.
 3. Starts or reuses `omniroute --no-open` in the background.
 4. Resolves `.opencode/session.id`.
 5. Launches `opencode -s <session_id>`.

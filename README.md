@@ -4,25 +4,25 @@ The Ubuntu command-line entrypoint for running OpenCode through OmniRoute.
 
 ## What is omnicode?
 
-`omnicode` turns a fresh Ubuntu machine into a working OpenCode + OmniRoute environment with a single global npm install. It manages the toolchain, wires OpenCode to OmniRoute, and exposes one command that initializes your project, starts OmniRoute in the background, and resumes your OpenCode session.
+`omnicode` is a thin wrapper that launches OpenCode through OmniRoute on Ubuntu. It expects you to install the underlying tools yourself, then handles session setup, optional GrayMatter and OpenSpec initialization, background OmniRoute lifecycle, and project-local sessions.
 
 ## Why
 
-Setting up OpenCode, OmniRoute, GrayMatter, OpenSpec, and the right OpenCode plugin by hand is repetitive and error-prone. `omnicode` automates that setup, keeps it idempotent, and gives you a project-local session file so every directory you work in remembers its OpenCode session.
+Installing OpenCode, OmniRoute, GrayMatter, and OpenSpec by hand is straightforward, but wiring them together every time is repetitive. `omnicode` removes the boilerplate while staying out of your package manager.
 
 ## Features
 
-- One-command install through npm on Ubuntu.
-- Automatic dependency verification and remediation.
+- Thin npm global command for Ubuntu.
 - Project-local OpenCode sessions via `.opencode/session.id`.
 - Background OmniRoute lifecycle with cleanup when OpenCode exits.
-- Safe uninstall that only removes `omnicode` and tells you what remains.
+- Optional `graymatter` and `openspec` initialization when installed.
+- Clear errors when required tools are missing.
 
 ## Explore
 
 - [Getting Started](Getting-Started) — install, run, and uninstall.
 - [How it works](How-it-works) — runtime flow, session handling, and lifecycle.
-- [Configuration](Configuration) — OpenCode config and plugin wiring.
+- [Configuration](Configuration) — paths and environment overrides.
 - [Troubleshooting](Troubleshooting) — common issues and rollback.
 
 ## License

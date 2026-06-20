@@ -5,20 +5,37 @@
 - Ubuntu Linux on AMD64/x86_64
 - Node.js 22 or later
 - npm
-- `sudo` for the first install
+- [OpenCode](https://github.com/opencode-ai/opencode)
+- [OmniRoute](https://github.com/meyverick/omniroute)
+- (Optional) GrayMatter
+- (Optional) OpenSpec
 
-## Install
+## Install dependencies
+
+`omnicode` requires `opencode` and `omniroute` to be on your `PATH`. Install them before installing `omnicode`:
+
+```bash
+npm install -g opencode
+npm install -g omniroute
+```
+
+If you use GrayMatter or OpenSpec, install those too:
+
+```bash
+# GrayMatter
+sudo install -m 755 graymatter /usr/local/bin/graymatter
+
+# OpenSpec
+npm install -g @fission-ai/openspec
+```
+
+## Install omnicode
 
 ```bash
 sudo npm install -g omnicode
 ```
 
-The `postinstall` script runs automatically and:
-
-- checks that your platform is supported,
-- verifies OpenCode, OmniRoute, `opencode-omniroute-auth`, OpenSpec, and GrayMatter,
-- installs or updates any missing dependency,
-- ensures `opencode-omniroute-auth` is registered in `~/.config/opencode/opencode.jsonc`.
+No postinstall scripts run and no additional tools are installed.
 
 ## Run
 
@@ -28,13 +45,12 @@ omnicode
 
 This will:
 
-1. Run dependency remediation again (so upgrades are picked up).
-2. Ensure your OpenCode plugin config is still correct.
-3. Run `graymatter init --only opencode`.
-4. Run `openspec init --force --tools opencode`.
-5. Start `omniroute --no-open` in the background, or reuse an already running instance.
-6. Resolve or create `.opencode/session.id` in the current directory.
-7. Launch `opencode -s <session_id>`.
+1. Verify that `opencode` and `omniroute` are available, or exit with an error.
+2. Run `graymatter init --only opencode` if GrayMatter is installed; warn otherwise.
+3. Run `openspec init --force --tools opencode` if OpenSpec is installed; warn otherwise.
+4. Start `omniroute --no-open` in the background, or reuse an already running instance.
+5. Resolve or create `.opencode/session.id` in the current directory.
+6. Launch `opencode -s <session_id>`.
 
 When OpenCode exits and no other OpenCode process is running, the OmniRoute process that `omnicode` started is stopped automatically.
 
@@ -55,10 +71,10 @@ npm uninstall -g omnicode
 This removes only the npm-managed `omnicode` package and command. The following remain installed and must be removed manually if desired:
 
 - OmniRoute (`npm uninstall -g omniroute`)
-- `opencode-omniroute-auth` (`npm uninstall -g opencode-omniroute-auth`)
-- OpenSpec (`npm uninstall -g @fission-ai/openspec@latest`)
-- GrayMatter (`sudo rm /usr/local/bin/graymatter`)
-- OpenCode plugin entry in `~/.config/opencode/opencode.jsonc`
+- OpenCode (`npm uninstall -g opencode`)
+- OpenSpec (`npm uninstall -g @fission-ai/openspec`)
+- GrayMatter binary (`sudo rm /usr/local/bin/graymatter`)
+- Your OpenCode config in `~/.config/opencode/opencode.jsonc`
 
 ## Update
 
@@ -66,4 +82,4 @@ This removes only the npm-managed `omnicode` package and command. The following 
 sudo npm install -g omnicode
 ```
 
-Reinstalling is idempotent and will update both the `omnicode` command and any stale dependencies it manages.
+Reinstalling only updates the `omnicode` wrapper.

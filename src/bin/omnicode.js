@@ -3,12 +3,7 @@ import { execSync } from "node:child_process";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import {
-  ensureOpenCodeConfig,
-  ensurePlatformSupported,
-  runInstallers,
-  warnIfGlobalBinNotOnPath,
-} from "../installer/lib.js";
+import { commandExists } from "../installer/lib.js";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const runtimeScript = join(__dirname, "omnicode-runtime.sh");
@@ -42,19 +37,14 @@ function parseArgs(argv) {
   return { sessionId };
 }
 
-async function main() {
-  ensurePlatformSupported();
+function main() {
+  const missing = ["opencode", "omniroute"].filter((cmd) => !commandExists(cmd));
+  if (missing.length > 0) {
+    console.error(`[omnicode] ERROR: missing required tool(s): ${missing.join(", ")}`);
+    console.error("[omnicode] Install them before running omnicode. See the README for instructions.");
+    process.exit(1);
+  }
 
-  // Run install remediation on every invocation so updates are picked up.
-  await runInstallers();
-
-  // Ensure OpenCode plugin config is present.
-  ensureOpenCodeConfig();
-
-  // Warn if the global npm bin dir is not on PATH.
-  warnIfGlobalBinNotOnPath();
-
-  // Delegate to the Bash runtime wrapper for process lifecycle management.
   const args = parseArgs(process.argv);
   const childArgs = [runtimeScript];
   if (args.sessionId) childArgs.push(args.sessionId);
@@ -71,7 +61,4 @@ async function main() {
   }
 }
 
-main().catch((err) => {
-  console.error("[omnicode] ERROR:", err.message);
-  process.exit(1);
-});
+main();

@@ -10,23 +10,24 @@ export PATH="$(npm config get prefix)/bin:$PATH"
 
 Add that line to your shell profile (`~/.bashrc`, `~/.zshrc`, etc.) to make it persistent.
 
-## First install fails without sudo
+## Missing required tool
 
-The first install requires `sudo` because GrayMatter is placed in `/usr/local/bin`. Either run with `sudo` or set:
+If you see:
 
-```bash
-OMNICODE_SKIP_SUDO=1 npm install -g omnicode
+```text
+[omnicode] ERROR: missing required tool(s): opencode, omniroute
 ```
 
-Skipping sudo may cause GrayMatter installation to fail.
+Install the missing tool(s) globally and make sure they are on `PATH`:
+
+```bash
+npm install -g opencode
+npm install -g omniroute
+```
 
 ## Platform not supported
 
 `omnicode` currently supports Ubuntu Linux on AMD64 only. Running on other platforms exits before making changes.
-
-## OpenCode config parsing error
-
-If `~/.config/opencode/opencode.jsonc` is malformed, `omnicode` prints the parse error and exits without modifying the file. Fix the syntax manually and rerun.
 
 ## OmniRoute does not start
 
@@ -45,14 +46,12 @@ If you want to fully remove everything `omnicode` touched:
 ```bash
 npm uninstall -g omnicode
 npm uninstall -g omniroute
-npm uninstall -g opencode-omniroute-auth
-npm uninstall -g @fission-ai/openspec@latest
+npm uninstall -g opencode
+npm uninstall -g @fission-ai/openspec
 sudo rm /usr/local/bin/graymatter
 rm -rf ~/.local/share/omnicode
 ```
 
-Then remove the `opencode-omniroute-auth` entry from `~/.config/opencode/opencode.jsonc` if desired.
-
 ## Legacy content
 
-The old `omos` / `oh-my-opencode-slim` workspace content lives in `archives/` and is no longer part of the active `omnicode` installer path.
+The old `omos` / `oh-my-opencode-slim` workspace content lives in `archives/` and is no longer part of the active `omnicode` path.

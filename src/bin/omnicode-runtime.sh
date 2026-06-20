@@ -84,11 +84,19 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-echo "[omnicode] initializing graymatter..."
-graymatter init --only opencode
+if command -v graymatter >/dev/null 2>&1; then
+  echo "[omnicode] initializing graymatter..."
+  graymatter init --only opencode || echo "[omnicode] WARNING: graymatter init failed; continuing."
+else
+  echo "[omnicode] WARNING: graymatter not found; skipping graymatter init."
+fi
 
-echo "[omnicode] initializing openspec..."
-openspec init --force --tools opencode
+if command -v openspec >/dev/null 2>&1; then
+  echo "[omnicode] initializing openspec..."
+  openspec init --force --tools opencode || echo "[omnicode] WARNING: openspec init failed; continuing."
+else
+  echo "[omnicode] WARNING: openspec not found; skipping openspec init."
+fi
 
 start_omniroute
 
