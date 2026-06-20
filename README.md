@@ -26,6 +26,15 @@ Installing OpenCode, OmniRoute, GrayMatter, and OpenSpec by hand is straightforw
 - [Configuration](Configuration) — paths and environment overrides.
 - [Troubleshooting](Troubleshooting) — common issues and rollback.
 
+## Acknowledgments
+
+Built on top of:
+
+- [OpenCode](https://github.com/opencode-ai/opencode) — AI-powered coding assistant
+- [OmniRoute](https://github.com/diegosouzapw/OmniRoute) — model routing layer
+- [OpenSpec](https://github.com/Fission-AI/OpenSpec) — AI agent workflow framework
+- [GrayMatter](https://github.com/angelnicolasc/graymatter) — persistent memory for AI agents
+
 ## License
 
 MIT
