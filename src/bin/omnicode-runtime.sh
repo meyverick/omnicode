@@ -11,10 +11,10 @@ PID_FILE="$RUNTIME_DIR/omniroute.pid"
 MAX_OMNI_WAIT=30
 OMNI_CHECK_DELAY=1
 
- export PATH="$PATH:$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin"
- 
- umask 0077
- mkdir -p "$RUNTIME_DIR"
+export PATH="$HOME/.local/bin:$PATH"
+
+umask 0077
+mkdir -p "$RUNTIME_DIR"
 
 is_pid_alive() {
   local pid="${1:-}"
@@ -22,11 +22,11 @@ is_pid_alive() {
 }
 
 is_omniroute_running() {
-  pgrep -f "omniroute" >/dev/null 2>&1
+  pgrep -x omniroute >/dev/null 2>&1
 }
 
 is_opencode_running() {
-  pgrep -f "opencode" >/dev/null 2>&1
+  pgrep -x opencode >/dev/null 2>&1
 }
 
 start_omniroute() {
@@ -35,16 +35,20 @@ start_omniroute() {
     return 0
   fi
 
+  if [[ -L "$PID_FILE" || -e "$PID_FILE" ]]; then
+    local pid
+    pid="$(cat "$PID_FILE" 2>/dev/null || true)"
+    if is_pid_alive "$pid"; then
+      echo "[omnicode] omniroute already running (pid: $pid)"
+      return 0
+    fi
+    rm -f "$PID_FILE"
+  fi
+
   echo "[omnicode] starting omniroute..."
   : > "$LOG_FILE"
   nohup omniroute --no-open >>"$LOG_FILE" 2>&1 &
   local pid=$!
-  if [[ -e "$PID_FILE" ]]; then
-    echo "[omnicode] ERROR: PID file already exists at $PID_FILE" >&2
-    exit 1
-  fi
-  touch "$PID_FILE"
-  chmod 600 "$PID_FILE"
   printf '%s\n' "$pid" > "$PID_FILE"
 
   local waited=0

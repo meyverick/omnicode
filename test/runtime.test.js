@@ -64,9 +64,24 @@ describe("omnicode-runtime.sh", () => {
     assert.ok(script.includes("umask 0077"));
   });
 
+  it("uses pgrep -x for exact process name matching", () => {
+    const script = readFileSync(runtimePath, "utf8");
+    assert.ok(script.includes("pgrep -x omniroute"));
+    assert.ok(script.includes("pgrep -x opencode"));
+    assert.ok(!script.includes("pgrep -f"));
+  });
+
+  it("prefers user-local PATH over system PATH", () => {
+    const script = readFileSync(runtimePath, "utf8");
+    const pathLine = script.split("\n").find((line) => line.startsWith("export PATH="));
+    assert.ok(pathLine);
+    assert.ok(pathLine.includes('"$HOME/.local/bin:$PATH"'));
+  });
+
   it("protects PID file from symlink attacks", () => {
     const script = readFileSync(runtimePath, "utf8");
-    assert.ok(script.includes("chmod 600"));
+    assert.ok(script.includes("-L \"$PID_FILE\""));
+    assert.ok(script.includes("rm -f \"$PID_FILE\""));
     assert.ok(script.includes("PID_FILE"));
   });
 });

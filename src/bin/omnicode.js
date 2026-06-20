@@ -103,7 +103,7 @@ export async function getLatestSessionId(directory = realpathSync(process.cwd())
   }
 }
 
-export async function resolveSessionMode(sessionId, continueSession = false, latestSessionId = null) {
+export async function resolveSessionMode(sessionId, latestSessionId = null) {
   if (sessionId) return { flag: "-s", id: sessionId };
   if (latestSessionId === null) latestSessionId = await getLatestSessionId();
   if (latestSessionId) return { flag: "-s", id: latestSessionId };
@@ -128,7 +128,7 @@ async function main() {
     process.exit(1);
   }
 
-  const mode = await resolveSessionMode(args.sessionId, args.continueSession);
+  const mode = await resolveSessionMode(args.sessionId);
   const childArgs = buildRuntimeArgs(mode);
 
   return new Promise((resolve, reject) => {
