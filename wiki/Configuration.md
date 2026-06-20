@@ -25,4 +25,4 @@
 - `test/` — package tests.
 - `doc/` — documentation shipped with the package.
 - `wiki/` — full technical wiki, tracked in the main repository.
-- `docs/` — upstream reference repositories as Git submodules.
+- `references/` — upstream reference repositories as Git submodules.

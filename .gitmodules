@@ -1,15 +1,15 @@
-[submodule "docs/OmniRoute"]
-	path = docs/OmniRoute
+[submodule "references/OmniRoute"]
+	path = references/OmniRoute
 	url = https://github.com/diegosouzapw/OmniRoute.git
-[submodule "docs/opencode"]
-	path = docs/opencode
+[submodule "references/opencode"]
+	path = references/opencode
 	url = https://github.com/anomalyco/opencode.git
-[submodule "docs/OpenSpec"]
-	path = docs/OpenSpec
+[submodule "references/OpenSpec"]
+	path = references/OpenSpec
 	url = https://github.com/Fission-AI/OpenSpec.git
-[submodule "docs/graymatter"]
-	path = docs/graymatter
+[submodule "references/graymatter"]
+	path = references/graymatter
 	url = https://github.com/angelnicolasc/graymatter.git
-[submodule "docs/opencode-omniroute-auth"]
-	path = docs/opencode-omniroute-auth
+[submodule "references/opencode-omniroute-auth"]
+	path = references/opencode-omniroute-auth
 	url = https://github.com/Alph4d0g/opencode-omniroute-auth.git
