@@ -21,10 +21,10 @@ Installing OpenCode, OmniRoute, GrayMatter, and OpenSpec by hand is straightforw
 
 ## Explore
 
-- [Getting Started](Getting-Started) — install, run, and uninstall.
-- [How it works](How-it-works) — runtime flow, session handling, and lifecycle.
-- [Configuration](Configuration) — paths and environment overrides.
-- [Troubleshooting](Troubleshooting) — common issues and rollback.
+- [Getting Started](https://github.com/meyverick/omnicode/wiki/Getting-Started) — install, run, and uninstall.
+- [How it works](https://github.com/meyverick/omnicode/wiki/How-it-works) — runtime flow, session handling, and lifecycle.
+- [Configuration](https://github.com/meyverick/omnicode/wiki/Configuration) — paths and environment overrides.
+- [Troubleshooting](https://github.com/meyverick/omnicode/wiki/Troubleshooting) — common issues and rollback.
 
 ## Acknowledgments
 
