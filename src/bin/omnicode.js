@@ -11,6 +11,8 @@ const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const runtimeScript = join(__dirname, "omnicode-runtime.sh");
 const packageJsonPath = join(__dirname, "..", "..", "package.json");
 
+const SESSION_ID_RE = /^[a-zA-Z0-9_-]+$/;
+
 export function printUsage() {
   console.log(`Usage: omnicode [-s <session_id>] [-c] [--status] [--version]`);
 }
@@ -22,7 +24,7 @@ export function getVersion() {
 
 export function isProcessRunning(name) {
   try {
-    execFileSync("pgrep", ["-f", name], { stdio: "ignore" });
+    execFileSync("pgrep", ["-x", name], { stdio: "ignore" });
     return true;
   } catch {
     return false;
@@ -75,38 +77,36 @@ export function parseArgs(argv) {
       printUsage();
       process.exit(2);
     }
+
+    if (sessionId && !SESSION_ID_RE.test(sessionId)) {
+      console.error(`[omnicode] ERROR: invalid session ID format`);
+      process.exit(2);
+    }
   }
   return { sessionId, continueSession };
 }
 
-export function getLatestSessionId(directory = realpathSync(process.cwd())) {
+export async function getLatestSessionId(directory = realpathSync(process.cwd())) {
   const dbPath = join(os.homedir(), ".local", "share", "opencode", "opencode.db");
   if (!existsSync(dbPath)) return null;
 
   try {
-    const output = execFileSync("python3", [
-      "-c",
-      `import sqlite3, sys
-db_path, directory = sys.argv[1], sys.argv[2]
-conn = sqlite3.connect(db_path)
-row = conn.execute("SELECT id FROM session WHERE directory = ? ORDER BY time_updated DESC LIMIT 1", (directory,)).fetchone()
-if row:
-    print(row[0])`,
-      dbPath,
-      directory,
-    ], {
-      encoding: "utf8",
-      stdio: ["pipe", "pipe", "ignore"],
-    });
-    return output.trim() || null;
+    const { DatabaseSync } = await import("node:sqlite");
+    const db = new DatabaseSync(dbPath, { readOnly: true });
+    const row = db.prepare(
+      "SELECT id FROM session WHERE directory = ? ORDER BY time_updated DESC LIMIT 1"
+    ).get(directory);
+    db.close();
+    return row ? row.id : null;
   } catch {
     return null;
   }
 }
 
-export function resolveSessionMode(sessionId, continueSession = false, latestSessionId = getLatestSessionId()) {
+export async function resolveSessionMode(sessionId, continueSession = false, latestSessionId = null) {
   if (sessionId) return { flag: "-s", id: sessionId };
-  if ((continueSession || latestSessionId) && latestSessionId) return { flag: "-s", id: latestSessionId };
+  if (latestSessionId === null) latestSessionId = await getLatestSessionId();
+  if (latestSessionId) return { flag: "-s", id: latestSessionId };
   return { flag: null, id: null };
 }
 
@@ -119,6 +119,8 @@ export function buildRuntimeArgs(mode) {
 }
 
 async function main() {
+  const args = parseArgs(process.argv);
+
   const missing = ["opencode", "omniroute"].filter((cmd) => !commandExists(cmd));
   if (missing.length > 0) {
     console.error(`[omnicode] ERROR: missing required tool(s): ${missing.join(", ")}`);
@@ -126,8 +128,7 @@ async function main() {
     process.exit(1);
   }
 
-  const args = parseArgs(process.argv);
-  const mode = resolveSessionMode(args.sessionId, args.continueSession);
+  const mode = await resolveSessionMode(args.sessionId, args.continueSession);
   const childArgs = buildRuntimeArgs(mode);
 
   return new Promise((resolve, reject) => {

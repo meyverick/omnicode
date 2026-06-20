@@ -47,6 +47,20 @@ describe("omnicode.js CLI integration", () => {
       /unknown option/
     );
   });
+
+  it("rejects invalid session ID format", () => {
+    assert.throws(
+      () => execSync(`node "${binPath}" -s 'foo; rm -rf /'`, { encoding: "utf8" }),
+      /invalid session ID format/
+    );
+  });
+
+  it("rejects session ID with spaces", () => {
+    assert.throws(
+      () => execSync(`node "${binPath}" -s 'foo bar'`, { encoding: "utf8" }),
+      /invalid session ID format/
+    );
+  });
 });
 
 describe("parseArgs", () => {
@@ -74,28 +88,28 @@ describe("parseArgs", () => {
 });
 
 describe("resolveSessionMode", () => {
-  it("returns -s mode when sessionId is provided", () => {
-    assert.deepEqual(resolveSessionMode("ses_abc", false, "ses_xyz"), { flag: "-s", id: "ses_abc" });
+  it("returns -s mode when sessionId is provided", async () => {
+    assert.deepEqual(await resolveSessionMode("ses_abc", false, "ses_xyz"), { flag: "-s", id: "ses_abc" });
   });
 
-  it("returns -s mode when sessionId is provided even if no latest session exists", () => {
-    assert.deepEqual(resolveSessionMode("ses_abc", false, null), { flag: "-s", id: "ses_abc" });
+  it("returns -s mode when sessionId is provided even if no latest session exists", async () => {
+    assert.deepEqual(await resolveSessionMode("ses_abc", false, null), { flag: "-s", id: "ses_abc" });
   });
 
-  it("returns -s mode with latest session when no sessionId and latest session exists", () => {
-    assert.deepEqual(resolveSessionMode(null, false, "ses_xyz"), { flag: "-s", id: "ses_xyz" });
+  it("returns -s mode with latest session when no sessionId and latest session exists", async () => {
+    assert.deepEqual(await resolveSessionMode(null, false, "ses_xyz"), { flag: "-s", id: "ses_xyz" });
   });
 
-  it("returns -s mode for -c with latest session", () => {
-    assert.deepEqual(resolveSessionMode(null, true, "ses_xyz"), { flag: "-s", id: "ses_xyz" });
+  it("returns -s mode for -c with latest session", async () => {
+    assert.deepEqual(await resolveSessionMode(null, true, "ses_xyz"), { flag: "-s", id: "ses_xyz" });
   });
 
-  it("returns no flag when no sessionId and no latest session exists", () => {
-    assert.deepEqual(resolveSessionMode(null, false, null), { flag: null, id: null });
+  it("returns no flag when no sessionId and no latest session exists", async () => {
+    assert.deepEqual(await resolveSessionMode(null, false, ""), { flag: null, id: null });
   });
 
-  it("returns no flag for -c when no latest session exists", () => {
-    assert.deepEqual(resolveSessionMode(null, true, null), { flag: null, id: null });
+  it("returns no flag for -c when no latest session exists", async () => {
+    assert.deepEqual(await resolveSessionMode(null, true, ""), { flag: null, id: null });
   });
 });
 

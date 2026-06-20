@@ -11,9 +11,10 @@ PID_FILE="$RUNTIME_DIR/omniroute.pid"
 MAX_OMNI_WAIT=30
 OMNI_CHECK_DELAY=1
 
-export PATH="$PATH:$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin"
-
-mkdir -p "$RUNTIME_DIR"
+ export PATH="$PATH:$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin"
+ 
+ umask 0077
+ mkdir -p "$RUNTIME_DIR"
 
 is_pid_alive() {
   local pid="${1:-}"
@@ -38,6 +39,12 @@ start_omniroute() {
   : > "$LOG_FILE"
   nohup omniroute --no-open >>"$LOG_FILE" 2>&1 &
   local pid=$!
+  if [[ -e "$PID_FILE" ]]; then
+    echo "[omnicode] ERROR: PID file already exists at $PID_FILE" >&2
+    exit 1
+  fi
+  touch "$PID_FILE"
+  chmod 600 "$PID_FILE"
   printf '%s\n' "$pid" > "$PID_FILE"
 
   local waited=0

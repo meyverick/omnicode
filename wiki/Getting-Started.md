@@ -3,7 +3,7 @@
 ## Requirements
 
 - Ubuntu Linux on AMD64/x86_64
-- Node.js 22 or later
+- Node.js 26 or later
 - npm
 - [OpenCode](https://github.com/opencode-ai/opencode)
 - [OmniRoute](https://github.com/meyverick/omniroute)

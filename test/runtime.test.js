@@ -58,4 +58,15 @@ describe("omnicode-runtime.sh", () => {
     const script = readFileSync(runtimePath, "utf8");
     assert.ok(script.includes("omniroute --no-open"));
   });
+
+  it("sets umask 0077 for log files", () => {
+    const script = readFileSync(runtimePath, "utf8");
+    assert.ok(script.includes("umask 0077"));
+  });
+
+  it("protects PID file from symlink attacks", () => {
+    const script = readFileSync(runtimePath, "utf8");
+    assert.ok(script.includes("chmod 600"));
+    assert.ok(script.includes("PID_FILE"));
+  });
 });

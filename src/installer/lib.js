@@ -1,11 +1,11 @@
-import { execSync, spawn } from "node:child_process";
-import { mkdirSync } from "node:fs";
+import { execFileSync, spawn } from "node:child_process";
+import { existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import os from "node:os";
 
 export function commandExists(command) {
   try {
-    execSync(`command -v ${command}`, { stdio: "ignore" });
+    execFileSync("which", [command], { stdio: "ignore" });
     return true;
   } catch {
     return false;
@@ -35,6 +35,6 @@ export function run(command, args = [], opts = {}) {
 
 export function getRuntimeDir() {
   const dir = join(os.homedir(), ".local", "share", "omnicode");
-  mkdirSync(dir, { recursive: true });
+  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
   return dir;
 }
