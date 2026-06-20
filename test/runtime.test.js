@@ -42,8 +42,16 @@ describe("omnicode-runtime.sh", () => {
     const script = readFileSync(runtimePath, "utf8");
     assert.ok(script.includes("if command -v graymatter"));
     assert.ok(script.includes("if command -v openspec"));
-    assert.ok(script.includes("graymatter not found; skipping"));
-    assert.ok(script.includes("openspec not found; skipping"));
+    assert.ok(script.includes("graymatter: not installed, skipping"));
+    assert.ok(script.includes("openspec: not installed, skipping"));
+  });
+
+  it("redirects graymatter and openspec init logs", () => {
+    const script = readFileSync(runtimePath, "utf8");
+    assert.ok(script.includes("GRAYMATTER_LOG"));
+    assert.ok(script.includes("OPENSPEC_LOG"));
+    assert.ok(script.includes('>"$GRAYMATTER_LOG" 2>&1'));
+    assert.ok(script.includes('>"$OPENSPEC_LOG" 2>&1'));
   });
 
   it("runs omniroute with --no-open", () => {

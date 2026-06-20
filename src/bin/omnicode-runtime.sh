@@ -5,6 +5,8 @@ SESSION_FLAG="${1:-}"
 SESSION_ID="${2:-}"
 RUNTIME_DIR="$HOME/.local/share/omnicode"
 LOG_FILE="$RUNTIME_DIR/omniroute.log"
+GRAYMATTER_LOG="$RUNTIME_DIR/graymatter-init.log"
+OPENSPEC_LOG="$RUNTIME_DIR/openspec-init.log"
 PID_FILE="$RUNTIME_DIR/omniroute.pid"
 MAX_OMNI_WAIT=30
 OMNI_CHECK_DELAY=1
@@ -74,17 +76,25 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 if command -v graymatter >/dev/null 2>&1; then
-  echo "[omnicode] initializing graymatter..."
-  graymatter init --only opencode || echo "[omnicode] WARNING: graymatter init failed; continuing."
+  echo "[omnicode] graymatter: initializing"
+  if graymatter init --only opencode >"$GRAYMATTER_LOG" 2>&1; then
+    echo "[omnicode] graymatter: ready"
+  else
+    echo "[omnicode] WARNING: graymatter init failed; continuing. Log: $GRAYMATTER_LOG"
+  fi
 else
-  echo "[omnicode] WARNING: graymatter not found; skipping graymatter init."
+  echo "[omnicode] graymatter: not installed, skipping"
 fi
 
 if command -v openspec >/dev/null 2>&1; then
-  echo "[omnicode] initializing openspec..."
-  openspec init --force --tools opencode || echo "[omnicode] WARNING: openspec init failed; continuing."
+  echo "[omnicode] openspec: initializing"
+  if openspec init --force --tools opencode >"$OPENSPEC_LOG" 2>&1; then
+    echo "[omnicode] openspec: ready"
+  else
+    echo "[omnicode] WARNING: openspec init failed; continuing. Log: $OPENSPEC_LOG"
+  fi
 else
-  echo "[omnicode] WARNING: openspec not found; skipping openspec init."
+  echo "[omnicode] openspec: not installed, skipping"
 fi
 
 start_omniroute

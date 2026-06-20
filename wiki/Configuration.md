@@ -9,6 +9,8 @@
 | Path | Purpose |
 |---|---|
 | `~/.local/share/omnicode/omniroute.log` | OmniRoute background log |
+| `~/.local/share/omnicode/graymatter-init.log` | Captured GrayMatter init output |
+| `~/.local/share/omnicode/openspec-init.log` | Captured OpenSpec init output |
 | `~/.local/share/omnicode/omniroute.pid` | OmniRoute PID tracking |
 
 ## Paths read
