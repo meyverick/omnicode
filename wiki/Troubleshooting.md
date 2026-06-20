@@ -82,7 +82,7 @@ This shows whether `opencode` and `omniroute` processes are currently running.
 If you want to fully remove everything `omnicode` touched:
 
 ```bash
-npm uninstall -g omnicode
+npm uninstall -g @meyverick/omnicode
 npm uninstall -g omniroute
 npm uninstall -g opencode
 npm uninstall -g @fission-ai/openspec

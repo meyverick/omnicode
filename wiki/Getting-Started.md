@@ -32,7 +32,7 @@ npm install -g @fission-ai/openspec
 ## Install omnicode
 
 ```bash
-sudo npm install -g https://github.com/meyverick/omnicode/tarball/main
+sudo npm install -g @meyverick/omnicode
 ```
 
 No postinstall scripts run and no additional tools are installed.
@@ -87,7 +87,7 @@ omnicode --version
 ## Uninstall
 
 ```bash
-npm uninstall -g omnicode
+npm uninstall -g @meyverick/omnicode
 ```
 
 This removes only the npm-managed `omnicode` package and command. The following remain installed and must be removed manually if desired:
@@ -102,7 +102,7 @@ This removes only the npm-managed `omnicode` package and command. The following 
 ## Update
 
 ```bash
-sudo npm install -g https://github.com/meyverick/omnicode/tarball/main
+sudo npm install -g @meyverick/omnicode
 ```
 
 Reinstalling only updates the `omnicode` wrapper.
