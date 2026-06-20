@@ -12,9 +12,7 @@
     "test": "node --test test/**/*.test.js"
   },
   "files": [
-    "src",
-    "test",
-    "doc"
+    "src"
   ],
   "engines": {
     "node": ">=22.0.0"
