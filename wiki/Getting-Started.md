@@ -3,7 +3,7 @@
 ## Requirements
 
 - Ubuntu Linux on AMD64/x86_64
-- Node.js 26 or later
+- Node.js 22 or later (developed and tested on Node 26; OmniRoute requires Node 22+)
 - npm
 - [OpenCode](https://github.com/opencode-ai/opencode)
 - [OmniRoute](https://github.com/meyverick/omniroute)

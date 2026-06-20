@@ -23,6 +23,10 @@ So I wrote this wrapper. It starts OmniRoute, inits GrayMatter and OpenSpec quie
 - Check runtime status with `omnicode --status`.
 - Print version with `omnicode --version`.
 
+## Requirements
+
+- Node.js 22 or later (developed and tested on Node 26; OmniRoute requires Node 22+).
+
 ## Explore
 
 - [Getting Started](https://github.com/meyverick/omnicode/wiki/Getting-Started) - install, run, and uninstall.
