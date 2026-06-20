@@ -54,19 +54,19 @@ describe("parseArgs", () => {
 
 describe("resolveSessionMode", () => {
   it("returns -s mode when sessionId is provided", () => {
-    assert.deepEqual(resolveSessionMode("ses_abc", true), { flag: "-s", id: "ses_abc" });
+    assert.deepEqual(resolveSessionMode("ses_abc", "ses_xyz"), { flag: "-s", id: "ses_abc" });
   });
 
-  it("returns -s mode when sessionId is provided even if no sessions exist", () => {
-    assert.deepEqual(resolveSessionMode("ses_abc", false), { flag: "-s", id: "ses_abc" });
+  it("returns -s mode when sessionId is provided even if no latest session", () => {
+    assert.deepEqual(resolveSessionMode("ses_abc", null), { flag: "-s", id: "ses_abc" });
   });
 
-  it("returns -c mode when no sessionId and sessions exist", () => {
-    assert.deepEqual(resolveSessionMode(null, true), { flag: "-c", id: null });
+  it("returns -s mode with latest session when no sessionId and a latest session exists", () => {
+    assert.deepEqual(resolveSessionMode(null, "ses_xyz"), { flag: "-s", id: "ses_xyz" });
   });
 
-  it("returns no flag when no sessionId and no sessions exist", () => {
-    assert.deepEqual(resolveSessionMode(null, false), { flag: null, id: null });
+  it("returns no flag when no sessionId and no latest session", () => {
+    assert.deepEqual(resolveSessionMode(null, null), { flag: null, id: null });
   });
 });
 
@@ -78,10 +78,10 @@ describe("buildRuntimeArgs", () => {
     assert.equal(args[2], "ses_abc");
   });
 
-  it("builds -c args", () => {
-    const args = buildRuntimeArgs({ flag: "-c", id: null });
-    assert.ok(args.length === 2);
-    assert.equal(args[1], "-c");
+  it("does not build a -c flag", () => {
+    const args = buildRuntimeArgs({ flag: "-s", id: "ses_abc" });
+    assert.ok(args.includes("-s"));
+    assert.ok(args.includes("ses_abc"));
   });
 
   it("builds no-flag args", () => {

@@ -26,10 +26,9 @@ describe("omnicode-runtime.sh", () => {
     assert.ok(script.includes('opencode -s "$SESSION_ID"'));
   });
 
-  it("launches opencode -c when given -c", () => {
+  it("does not use -c continue flag", () => {
     const script = readFileSync(runtimePath, "utf8");
-    assert.ok(script.includes('SESSION_FLAG" == "-c"'));
-    assert.ok(script.includes("opencode -c"));
+    assert.ok(!script.includes("opencode -c"));
   });
 
   it("launches plain opencode when no session flag is given", () => {

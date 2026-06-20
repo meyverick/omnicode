@@ -29,7 +29,7 @@ OmniRoute is started with `nohup omniroute --no-open >> ~/.local/share/omnicode/
 `omnicode` does not invent or persist session IDs. OpenCode manages its own sessions. The launch mode is resolved as follows:
 
 - If you pass `-s <session_id>`, `omnicode` launches `opencode -s <session_id>` directly. OpenCode will report an error if that session does not exist.
-- If you pass nothing and at least one OpenCode session exists for the current directory, `omnicode` launches `opencode -c` to continue the most recent session.
+- If you pass nothing and at least one OpenCode session exists for the current directory, `omnicode` parses the latest session ID from `opencode session list` and launches `opencode -s <latest_session_id>`.
 - If you pass nothing and no session exists, `omnicode` launches `opencode` so a new session is created.
 
-Session existence is detected by running `opencode session list` and checking for session IDs in the output.
+Session IDs are read from `opencode session list`; the first session ID in the output is treated as the most recent.
