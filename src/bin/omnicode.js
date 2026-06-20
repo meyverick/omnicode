@@ -22,7 +22,7 @@ export function getVersion() {
 
 export function isProcessRunning(name) {
   try {
-    execFileSync("pgrep", ["-x", name], { stdio: "ignore" });
+    execFileSync("pgrep", ["-f", name], { stdio: "ignore" });
     return true;
   } catch {
     return false;

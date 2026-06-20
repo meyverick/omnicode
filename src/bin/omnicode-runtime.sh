@@ -11,7 +11,7 @@ PID_FILE="$RUNTIME_DIR/omniroute.pid"
 MAX_OMNI_WAIT=30
 OMNI_CHECK_DELAY=1
 
-export PATH="$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
+export PATH="$PATH:$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin"
 
 mkdir -p "$RUNTIME_DIR"
 
@@ -21,11 +21,11 @@ is_pid_alive() {
 }
 
 is_omniroute_running() {
-  pgrep -x "omniroute" >/dev/null 2>&1
+  pgrep -f "omniroute" >/dev/null 2>&1
 }
 
 is_opencode_running() {
-  pgrep -x "opencode" >/dev/null 2>&1
+  pgrep -f "opencode" >/dev/null 2>&1
 }
 
 start_omniroute() {
@@ -41,17 +41,23 @@ start_omniroute() {
   printf '%s\n' "$pid" > "$PID_FILE"
 
   local waited=0
-  while ! is_pid_alive "$pid" && [[ "$waited" -lt "$MAX_OMNI_WAIT" ]]; do
+  while [[ "$waited" -lt "$MAX_OMNI_WAIT" ]]; do
     sleep "$OMNI_CHECK_DELAY"
     waited=$((waited + OMNI_CHECK_DELAY))
+
+    if ! is_pid_alive "$pid"; then
+      echo "[omnicode] ERROR: omniroute exited during startup. Log: $LOG_FILE" >&2
+      exit 1
+    fi
+
+    if is_omniroute_running; then
+      echo "[omnicode] omniroute started (pid: $pid)"
+      return 0
+    fi
   done
 
-  if ! is_pid_alive "$pid"; then
-    echo "[omnicode] ERROR: omniroute exited during startup. Log: $LOG_FILE" >&2
-    exit 1
-  fi
-
-  echo "[omnicode] omniroute started (pid: $pid)"
+  echo "[omnicode] ERROR: omniroute did not become ready. Log: $LOG_FILE" >&2
+  exit 1
 }
 
 stop_omniroute_if_idle() {
