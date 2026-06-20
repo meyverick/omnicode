@@ -1,3 +1,15 @@
-[submodule "docs/oh-my-opencode-slim"]
-	path = docs/oh-my-opencode-slim
-	url = https://github.com/alvinunreal/oh-my-opencode-slim.git
+[submodule "docs/OmniRoute"]
+	path = docs/OmniRoute
+	url = https://github.com/diegosouzapw/OmniRoute.git
+[submodule "docs/opencode"]
+	path = docs/opencode
+	url = https://github.com/anomalyco/opencode.git
+[submodule "docs/OpenSpec"]
+	path = docs/OpenSpec
+	url = https://github.com/Fission-AI/OpenSpec.git
+[submodule "docs/graymatter"]
+	path = docs/graymatter
+	url = https://github.com/angelnicolasc/graymatter.git
+[submodule "docs/opencode-omniroute-auth"]
+	path = docs/opencode-omniroute-auth
+	url = https://github.com/Alph4d0g/opencode-omniroute-auth.git

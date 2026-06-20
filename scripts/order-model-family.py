@@ -31,6 +31,7 @@ FREE_MODELS = {
 
 FREE_PROVIDERS = {
     "deepseek",
+    "google",
     "huggingface",
     "mistral",
     "nvidia",

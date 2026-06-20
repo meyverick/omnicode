@@ -69,6 +69,8 @@ Free-tier quota can be exhausted rapidly. Any preset using these must include no
 - Free-tier models/providers may be used early-but-not-only when they materially improve quality, speed, cost, or capability coverage.
 - Early-but-not-only means place the free-tier route before paid/stable alternatives, but always include non-free fallback models after it.
 - Use early-but-not-only especially for opportunistic creative/research roles where quota exhaustion is acceptable; avoid it for critical deterministic execution unless explicitly justified.
+- Balance model-family usage across free providers and paid providers. Do not route high-frequency personas through one free provider family exclusively; mix free-capable families with paid fallbacks to avoid rapidly exhausting any single quota pool.
+- For `default` routing, prefer free-capable families first with paid fallbacks later. For `critical` routing, prefer paid/stable families first but keep free-capable fallbacks later for coverage and quota resilience.
 
 ### Free-tier models
 
@@ -112,6 +114,7 @@ Free-tier quota can be exhausted rapidly. Any preset using these must include no
 ### Free-tier providers
 
 - `deepseek`
+- `google`
 - `huggingface`
 - `mistral`
 - `nvidia`

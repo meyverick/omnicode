@@ -1,41 +1,27 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-usage() {
-  echo "Usage: omnicode [-s <opencode-session-id>]"
-}
-
-SESSION=""
-while getopts ":s:h" opt; do
-  case "$opt" in
-    s) SESSION="$OPTARG" ;;
-    h) usage; exit 0 ;;
-    :) echo "[omnicode] ERROR: -$OPTARG requires a value" >&2; usage >&2; exit 2 ;;
-    \?) echo "[omnicode] ERROR: unknown option -$OPTARG" >&2; usage >&2; exit 2 ;;
-  esac
-done
-
-export PATH="$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
-
+SESSION_ID="${1:-}"
 RUNTIME_DIR="$HOME/.local/share/omnicode"
 LOG_FILE="$RUNTIME_DIR/omniroute.log"
 PID_FILE="$RUNTIME_DIR/omniroute.pid"
 MAX_OMNI_WAIT=30
 OMNI_CHECK_DELAY=1
 
+export PATH="$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
+
 mkdir -p "$RUNTIME_DIR"
 
-OMNI_BIN="$(command -v omniroute || true)"
-OPENCODE_BIN="$(command -v opencode || true)"
+if [[ -z "$SESSION_ID" ]]; then
+  if [[ -f ".opencode/session.id" ]]; then
+    SESSION_ID="$(cat ".opencode/session.id" | tr -d '[:space:]')"
+  fi
 
-if [[ -z "$OMNI_BIN" ]]; then
-  echo "[omnicode] ERROR: omniroute not found in PATH" >&2
-  exit 127
-fi
-
-if [[ -z "$OPENCODE_BIN" ]]; then
-  echo "[omnicode] ERROR: opencode not found in PATH" >&2
-  exit 127
+  if [[ -z "$SESSION_ID" ]]; then
+    mkdir -p ".opencode"
+    SESSION_ID="$(cat /proc/sys/kernel/random/uuid 2>/dev/null || uuidgen 2>/dev/null || python3 -c 'import uuid; print(uuid.uuid4())')"
+    echo "$SESSION_ID" > ".opencode/session.id"
+  fi
 fi
 
 is_pid_alive() {
@@ -44,11 +30,11 @@ is_pid_alive() {
 }
 
 is_omniroute_running() {
-  pgrep -x "$(basename "$OMNI_BIN")" >/dev/null 2>&1
+  pgrep -x "omniroute" >/dev/null 2>&1
 }
 
 is_opencode_running() {
-  pgrep -x "$(basename "$OPENCODE_BIN")" >/dev/null 2>&1
+  pgrep -x "opencode" >/dev/null 2>&1
 }
 
 start_omniroute() {
@@ -59,7 +45,7 @@ start_omniroute() {
 
   echo "[omnicode] starting omniroute..."
   : > "$LOG_FILE"
-  nohup "$OMNI_BIN" --no-open >>"$LOG_FILE" 2>&1 &
+  nohup omniroute --no-open >>"$LOG_FILE" 2>&1 &
   local pid=$!
   printf '%s\n' "$pid" > "$PID_FILE"
 
@@ -98,12 +84,13 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
+echo "[omnicode] initializing graymatter..."
+graymatter init --only opencode
+
+echo "[omnicode] initializing openspec..."
+openspec init --force --tools opencode
+
 start_omniroute
 
-if [[ -n "$SESSION" ]]; then
-  echo "[omnicode] launching opencode (session: $SESSION)"
-  "$OPENCODE_BIN" -s "$SESSION"
-else
-  echo "[omnicode] launching opencode"
-  "$OPENCODE_BIN"
-fi
+echo "[omnicode] launching opencode (session: $SESSION_ID)"
+opencode -s "$SESSION_ID"

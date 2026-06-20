@@ -84,13 +84,57 @@
     "opencode/gemini-3-flash"
   ],
   "gemini-3-flash-preview": [
-    "ollama-cloud/gemini-3-flash-preview"
+    "ollama-cloud/gemini-3-flash-preview",
+    "google/gemini-3-flash-preview"
   ],
   "gemini-3.1-pro": [
     "opencode/gemini-3.1-pro"
   ],
   "gemini-3.5-flash": [
-    "opencode/gemini-3.5-flash"
+    "opencode/gemini-3.5-flash",
+    "google/gemini-3.5-flash"
+  ],
+  "gemini-2.5-flash": [
+    "google/gemini-2.5-flash"
+  ],
+  "gemini-2.5-flash-image": [
+    "google/gemini-2.5-flash-image"
+  ],
+  "gemini-2.5-flash-lite": [
+    "google/gemini-2.5-flash-lite"
+  ],
+  "gemini-2.5-flash-preview-tts": [
+    "google/gemini-2.5-flash-preview-tts"
+  ],
+  "gemini-2.5-pro": [
+    "google/gemini-2.5-pro"
+  ],
+  "gemini-2.5-pro-preview-tts": [
+    "google/gemini-2.5-pro-preview-tts"
+  ],
+  "gemini-3-pro-image-preview": [
+    "google/gemini-3-pro-image-preview"
+  ],
+  "gemini-3.1-flash-image-preview": [
+    "google/gemini-3.1-flash-image-preview"
+  ],
+  "gemini-3.1-flash-lite": [
+    "google/gemini-3.1-flash-lite"
+  ],
+  "gemini-3.1-pro-preview": [
+    "google/gemini-3.1-pro-preview"
+  ],
+  "gemini-3.1-pro-preview-customtools": [
+    "google/gemini-3.1-pro-preview-customtools"
+  ],
+  "gemini-embedding-001": [
+    "google/gemini-embedding-001"
+  ],
+  "gemini-flash-latest": [
+    "google/gemini-flash-latest"
+  ],
+  "gemini-flash-lite-latest": [
+    "google/gemini-flash-lite-latest"
   ],
   "gemma-2-2b-it": [
     "nvidia/google/gemma-2-2b-it"
@@ -103,7 +147,14 @@
   ],
   "gemma-4-31b-it": [
     "nvidia/google/gemma-4-31b-it",
-    "openrouter/google/gemma-4-31b-it:free"
+    "openrouter/google/gemma-4-31b-it:free",
+    "google/gemma-4-31b-it"
+  ],
+  "gemma-4-E2B-it": [
+    "google/gemma-4-E2B-it"
+  ],
+  "gemma-4-E4B-it": [
+    "google/gemma-4-E4B-it"
   ],
   "gemma3:12b": [
     "ollama-cloud/gemma3:12b"
@@ -569,7 +620,8 @@
     "openrouter/cognitivecomputations/dolphin-mistral-24b-venice-edition:free"
   ],
   "gemma-4-26b-a4b-it": [
-    "openrouter/google/gemma-4-26b-a4b-it:free"
+    "openrouter/google/gemma-4-26b-a4b-it:free",
+    "google/gemma-4-26b-a4b-it"
   ],
   "lfm-2.5-1.2b-instruct": [
     "openrouter/liquid/lfm-2.5-1.2b-instruct:free"
