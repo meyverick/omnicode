@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { execSync, spawn } from "node:child_process";
-import { realpathSync } from "node:fs";
+import { readFileSync, realpathSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -8,9 +8,15 @@ import { commandExists } from "../installer/lib.js";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const runtimeScript = join(__dirname, "omnicode-runtime.sh");
+const packageJsonPath = join(__dirname, "..", "..", "package.json");
 
 export function printUsage() {
-  console.log(`Usage: omnicode [-s <session_id>]`);
+  console.log(`Usage: omnicode [-s <session_id>] [--version]`);
+}
+
+export function getVersion() {
+  const pkg = JSON.parse(readFileSync(packageJsonPath, "utf8"));
+  return pkg.version;
 }
 
 export function parseArgs(argv) {
@@ -19,6 +25,10 @@ export function parseArgs(argv) {
     const arg = argv[i];
     if (arg === "-h" || arg === "--help") {
       printUsage();
+      process.exit(0);
+    }
+    if (arg === "-v" || arg === "--version") {
+      console.log(getVersion());
       process.exit(0);
     }
     if (arg === "-s") {

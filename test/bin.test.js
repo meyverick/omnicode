@@ -4,7 +4,7 @@ import { execSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { join, dirname } from "node:path";
 
-import { parseArgs, resolveSessionMode, buildRuntimeArgs } from "../src/bin/omnicode.js";
+import { parseArgs, resolveSessionMode, buildRuntimeArgs, getVersion } from "../src/bin/omnicode.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const binPath = join(__dirname, "..", "src", "bin", "omnicode.js");
@@ -21,6 +21,11 @@ describe("omnicode.js CLI integration", () => {
   it("shows usage for --help", () => {
     const output = execSync(`node "${binPath}" --help`, { encoding: "utf8" });
     assert.ok(output.includes("Usage: omnicode"));
+  });
+
+  it("shows package version for --version", () => {
+    const output = execSync(`node "${binPath}" --version`, { encoding: "utf8" });
+    assert.equal(output.trim(), getVersion());
   });
 
   it("rejects -s without a value", () => {
