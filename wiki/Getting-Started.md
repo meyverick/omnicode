@@ -63,6 +63,14 @@ This launches OpenCode with `opencode -s <session_id>`. OpenCode will error if t
 
 Without `-s`, `omnicode` reads the latest session ID for the current directory from `~/.local/share/opencode/opencode.db` and continues it with `opencode -s <session_id>`, or starts a new session if none exists. You can also pass `-c` to force the same latest-session lookup.
 
+### Check runtime status
+
+```bash
+omnicode --status
+```
+
+This prints whether `opencode` and `omniroute` processes are currently running.
+
 ## Uninstall
 
 ```bash

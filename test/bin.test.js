@@ -4,7 +4,7 @@ import { execSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { join, dirname } from "node:path";
 
-import { parseArgs, resolveSessionMode, buildRuntimeArgs, getVersion } from "../src/bin/omnicode.js";
+import { parseArgs, resolveSessionMode, buildRuntimeArgs, getVersion, printStatus } from "../src/bin/omnicode.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const binPath = join(__dirname, "..", "src", "bin", "omnicode.js");
@@ -26,6 +26,12 @@ describe("omnicode.js CLI integration", () => {
   it("shows package version for --version", () => {
     const output = execSync(`node "${binPath}" --version`, { encoding: "utf8" });
     assert.equal(output.trim(), getVersion());
+  });
+
+  it("shows process state for --status", () => {
+    const output = execSync(`node "${binPath}" --status`, { encoding: "utf8" });
+    assert.match(output, /opencode: (running|stopped)/);
+    assert.match(output, /omniroute: (running|stopped)/);
   });
 
   it("rejects -s without a value", () => {
@@ -109,5 +115,19 @@ describe("buildRuntimeArgs", () => {
   it("builds no-flag args", () => {
     const args = buildRuntimeArgs({ flag: null, id: null });
     assert.ok(args.length === 1);
+  });
+});
+
+describe("printStatus", () => {
+  it("prints process statuses", () => {
+    const lines = [];
+    const originalLog = console.log;
+    console.log = (line) => lines.push(line);
+    try {
+      printStatus({ opencode: true, omniroute: false });
+    } finally {
+      console.log = originalLog;
+    }
+    assert.deepEqual(lines, ["[omnicode] opencode: running", "[omnicode] omniroute: stopped"]);
   });
 });

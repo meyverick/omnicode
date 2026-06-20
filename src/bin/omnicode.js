@@ -12,12 +12,33 @@ const runtimeScript = join(__dirname, "omnicode-runtime.sh");
 const packageJsonPath = join(__dirname, "..", "..", "package.json");
 
 export function printUsage() {
-  console.log(`Usage: omnicode [-s <session_id>] [-c] [--version]`);
+  console.log(`Usage: omnicode [-s <session_id>] [-c] [--status] [--version]`);
 }
 
 export function getVersion() {
   const pkg = JSON.parse(readFileSync(packageJsonPath, "utf8"));
   return pkg.version;
+}
+
+export function isProcessRunning(name) {
+  try {
+    execFileSync("pgrep", ["-x", name], { stdio: "ignore" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function getProcessStatus() {
+  return {
+    opencode: isProcessRunning("opencode"),
+    omniroute: isProcessRunning("omniroute"),
+  };
+}
+
+export function printStatus(status = getProcessStatus()) {
+  console.log(`[omnicode] opencode: ${status.opencode ? "running" : "stopped"}`);
+  console.log(`[omnicode] omniroute: ${status.omniroute ? "running" : "stopped"}`);
 }
 
 export function parseArgs(argv) {
@@ -31,6 +52,10 @@ export function parseArgs(argv) {
     }
     if (arg === "-v" || arg === "--version") {
       console.log(getVersion());
+      process.exit(0);
+    }
+    if (arg === "--status" || arg === "status") {
+      printStatus();
       process.exit(0);
     }
     if (arg === "-c" || arg === "--continue") {
