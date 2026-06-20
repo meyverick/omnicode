@@ -8,7 +8,11 @@ The Ubuntu command-line entrypoint for running OpenCode through OmniRoute.
 
 ## Why
 
-Installing OpenCode, OmniRoute, GrayMatter, and OpenSpec by hand is straightforward, but wiring them together every time is repetitive. `omnicode` removes the boilerplate while staying out of your package manager.
+Because I'm lazy. Not "I'll automate this repetitive task" lazy, but "I keep opening a second terminal just to run `omniroute`, then manually init GrayMatter, then manually init OpenSpec, then forget which session ID I was using" lazy.
+
+Yes, I know OmniRoute is designed to run on a server. But I don't have a server at home, and I still want to save tokens by routing requests through it locally. Bonus: I get to use a bunch of free tiers from different providers without having to remember which API key goes where.
+
+So I wrote this wrapper. It starts OmniRoute, inits GrayMatter and OpenSpec quietly in the background, remembers my session per project, and shuts everything down when I'm done. I run one command and pretend I'm a responsible developer with proper infrastructure.
 
 ## Features
 
@@ -21,19 +25,19 @@ Installing OpenCode, OmniRoute, GrayMatter, and OpenSpec by hand is straightforw
 
 ## Explore
 
-- [Getting Started](https://github.com/meyverick/omnicode/wiki/Getting-Started) — install, run, and uninstall.
-- [How it works](https://github.com/meyverick/omnicode/wiki/How-it-works) — runtime flow, session handling, and lifecycle.
-- [Configuration](https://github.com/meyverick/omnicode/wiki/Configuration) — paths and environment overrides.
-- [Troubleshooting](https://github.com/meyverick/omnicode/wiki/Troubleshooting) — common issues and rollback.
+- [Getting Started](https://github.com/meyverick/omnicode/wiki/Getting-Started) - install, run, and uninstall.
+- [How it works](https://github.com/meyverick/omnicode/wiki/How-it-works) - runtime flow, session handling, and lifecycle.
+- [Configuration](https://github.com/meyverick/omnicode/wiki/Configuration) - paths and environment overrides.
+- [Troubleshooting](https://github.com/meyverick/omnicode/wiki/Troubleshooting) - common issues and rollback.
 
 ## Acknowledgments
 
 Built on top of:
 
-- [OpenCode](https://github.com/opencode-ai/opencode) — AI-powered coding assistant
-- [OmniRoute](https://github.com/diegosouzapw/OmniRoute) — model routing layer
-- [OpenSpec](https://github.com/Fission-AI/OpenSpec) — AI agent workflow framework
-- [GrayMatter](https://github.com/angelnicolasc/graymatter) — persistent memory for AI agents
+- [OpenCode](https://github.com/opencode-ai/opencode) - AI-powered coding assistant
+- [OmniRoute](https://github.com/diegosouzapw/OmniRoute) - model routing layer
+- [OpenSpec](https://github.com/Fission-AI/OpenSpec) - AI agent workflow framework
+- [GrayMatter](https://github.com/angelnicolasc/graymatter) - persistent memory for AI agents
 
 ## License
 
