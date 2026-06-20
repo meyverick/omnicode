@@ -25,7 +25,7 @@ So I wrote this wrapper. It starts OmniRoute, inits GrayMatter and OpenSpec quie
 
 ## Requirements
 
-- Node.js 22 or later (developed and tested on Node 26; OmniRoute requires Node >=22 <23 or >=24 <27).
+- Node.js 22 or later (developed and tested on Node 26; OmniRoute requires Node >=22 <=24).
 
 ## Explore
 
