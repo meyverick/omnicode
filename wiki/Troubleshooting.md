@@ -2,7 +2,7 @@
 
 ## `omnicode` is not on PATH
 
-After `sudo npm install -g omnicode`, if `omnicode` is not found, ensure the global npm bin directory is on `PATH`:
+After installing, if `omnicode` is not found, ensure the global npm bin directory is on `PATH`:
 
 ```bash
 export PATH="$(npm config get prefix)/bin:$PATH"
@@ -39,6 +39,44 @@ cat ~/.local/share/omnicode/omniroute.log
 
 Verify `omniroute --no-open` works when run directly.
 
+If you see a `better-sqlite3` native module error, it usually means OmniRoute is running under the wrong Node version. Ensure your current shell uses the same Node that OmniRoute was installed with:
+
+```bash
+which omniroute
+omniroute --version
+```
+
+If needed, rebuild:
+
+```bash
+cd $(dirname $(which omniroute))/../lib/node_modules/omniroute/dist && npm rebuild better-sqlite3
+```
+
+Or run:
+
+```bash
+omniroute runtime repair
+```
+
+## GrayMatter or OpenSpec init fails
+
+Check the captured logs:
+
+```bash
+cat ~/.local/share/omnicode/graymatter-init.log
+cat ~/.local/share/omnicode/openspec-init.log
+```
+
+These failures are non-fatal; `omnicode` continues even if initialization fails.
+
+## Check runtime status
+
+```bash
+omnicode --status
+```
+
+This shows whether `opencode` and `omniroute` processes are currently running.
+
 ## Rollback / manual cleanup
 
 If you want to fully remove everything `omnicode` touched:
@@ -51,7 +89,3 @@ npm uninstall -g @fission-ai/openspec
 sudo rm /usr/local/bin/graymatter
 rm -rf ~/.local/share/omnicode
 ```
-
-## Legacy content
-
-The old `omos` / `oh-my-opencode-slim` workspace content lives in `archives/` and is no longer part of the active `omnicode` path.

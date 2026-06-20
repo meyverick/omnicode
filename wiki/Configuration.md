@@ -19,17 +19,10 @@
 |---|---|
 | `~/.local/share/opencode/opencode.db` | Read latest OpenCode session for the current directory |
 
-## Environment overrides
-
-| Variable | Effect |
-|---|---|
-| `OMNICODE_SKIP_SUDO=1` | Deprecated; `omnicode` no longer requires sudo |
-
 ## Package structure
 
-- `src/installer/` — minimal runtime helpers.
 - `src/bin/` — runtime command and Bash wrapper.
+- `src/installer/` — minimal runtime helpers.
 - `test/` — package tests.
-- `doc/` — documentation shipped with the package.
 - `wiki/` — full technical wiki, tracked in the main repository.
 - `references/` — upstream reference repositories as Git submodules.

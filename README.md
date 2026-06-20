@@ -4,7 +4,7 @@ The Ubuntu command-line entrypoint for running OpenCode through OmniRoute.
 
 ## What is omnicode?
 
-`omnicode` is a thin wrapper that launches OpenCode through OmniRoute on Ubuntu. It expects you to install the underlying tools yourself, then handles session setup, optional GrayMatter and OpenSpec initialization, background OmniRoute lifecycle, and project-local sessions.
+`omnicode` is a thin wrapper that launches OpenCode through OmniRoute on Ubuntu. It expects you to install the underlying tools yourself, then handles optional GrayMatter and OpenSpec initialization, background OmniRoute lifecycle, and project-local OpenCode sessions.
 
 ## Why
 
@@ -13,10 +13,11 @@ Installing OpenCode, OmniRoute, GrayMatter, and OpenSpec by hand is straightforw
 ## Features
 
 - Thin npm global command for Ubuntu.
-- Project-local OpenCode sessions via `.opencode/session.id`.
+- Automatic session resume per project using the OpenCode database.
 - Background OmniRoute lifecycle with cleanup when OpenCode exits.
-- Optional `graymatter` and `openspec` initialization when installed.
-- Clear errors when required tools are missing.
+- Quiet GrayMatter and OpenSpec initialization with captured logs.
+- Check runtime status with `omnicode --status`.
+- Print version with `omnicode --version`.
 
 ## Explore
 

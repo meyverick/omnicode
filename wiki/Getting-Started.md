@@ -32,7 +32,7 @@ npm install -g @fission-ai/openspec
 ## Install omnicode
 
 ```bash
-sudo npm install -g omnicode
+sudo npm install -g https://github.com/meyverick/omnicode/tarball/main
 ```
 
 No postinstall scripts run and no additional tools are installed.
@@ -46,10 +46,11 @@ omnicode
 This will:
 
 1. Verify that `opencode` and `omniroute` are available, or exit with an error.
-2. Run `graymatter init --only opencode` if GrayMatter is installed; warn otherwise.
-3. Run `openspec init --force --tools opencode` if OpenSpec is installed; warn otherwise.
+2. Run GrayMatter initialization quietly if installed (output captured to `~/.local/share/omnicode/graymatter-init.log`).
+3. Run OpenSpec initialization quietly if installed (output captured to `~/.local/share/omnicode/openspec-init.log`).
 4. Start `omniroute --no-open` in the background, or reuse an already running instance.
-5. Launch OpenCode with the resolved session argument (see below).
+5. Look up the latest session for the current directory in the OpenCode database.
+6. Launch `opencode -s <session_id>` if a session exists, or plain `opencode` to create a new session.
 
 When OpenCode exits and no other OpenCode process is running, the OmniRoute process that `omnicode` started is stopped automatically.
 
@@ -61,7 +62,13 @@ omnicode -s <session_id>
 
 This launches OpenCode with `opencode -s <session_id>`. OpenCode will error if that session does not exist.
 
-Without `-s`, `omnicode` reads the latest session ID for the current directory from `~/.local/share/opencode/opencode.db` and continues it with `opencode -s <session_id>`, or starts a new session if none exists. You can also pass `-c` to force the same latest-session lookup.
+### Force continue last session
+
+```bash
+omnicode -c
+```
+
+This forces the same latest-session lookup as plain `omnicode` but makes it explicit. If a session exists for the current directory, it is resumed via `opencode -s <session_id>`.
 
 ### Check runtime status
 
@@ -70,6 +77,12 @@ omnicode --status
 ```
 
 This prints whether `opencode` and `omniroute` processes are currently running.
+
+### Print version
+
+```bash
+omnicode --version
+```
 
 ## Uninstall
 
@@ -84,11 +97,12 @@ This removes only the npm-managed `omnicode` package and command. The following 
 - OpenSpec (`npm uninstall -g @fission-ai/openspec`)
 - GrayMatter binary (`sudo rm /usr/local/bin/graymatter`)
 - Your OpenCode config in `~/.config/opencode/opencode.jsonc`
+- Runtime data in `~/.local/share/omnicode/`
 
 ## Update
 
 ```bash
-sudo npm install -g omnicode
+sudo npm install -g https://github.com/meyverick/omnicode/tarball/main
 ```
 
 Reinstalling only updates the `omnicode` wrapper.
