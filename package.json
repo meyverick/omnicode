@@ -1,6 +1,6 @@
 {
   "name": "@meyverick/omnicode",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "Ubuntu command-line entrypoint for OpenCode through OmniRoute",
   "type": "module",
   "bin": {
