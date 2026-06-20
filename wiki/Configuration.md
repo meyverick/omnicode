@@ -10,7 +10,6 @@
 |---|---|
 | `~/.local/share/omnicode/omniroute.log` | OmniRoute background log |
 | `~/.local/share/omnicode/omniroute.pid` | OmniRoute PID tracking |
-| `.opencode/session.id` | Project-local OpenCode session ID |
 
 ## Environment overrides
 

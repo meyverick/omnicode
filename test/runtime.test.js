@@ -13,13 +13,29 @@ describe("omnicode-runtime.sh", () => {
     execSync(`bash -n "${runtimePath}"`);
   });
 
-  it("contains the expected commands", () => {
+  it("does not reference .opencode/session.id", () => {
     const script = readFileSync(runtimePath, "utf8");
-    assert.ok(script.includes("graymatter init --only opencode"));
-    assert.ok(script.includes("openspec init --force --tools opencode"));
-    assert.ok(script.includes("omniroute --no-open"));
-    assert.ok(script.includes("opencode -s"));
-    assert.ok(script.includes(".opencode/session.id"));
+    assert.ok(!script.includes(".opencode/session.id"));
+    assert.ok(!script.includes("uuid"));
+    assert.ok(!script.includes("session.id"));
+  });
+
+  it("launches opencode -s when given -s and a session ID", () => {
+    const script = readFileSync(runtimePath, "utf8");
+    assert.ok(script.includes('SESSION_FLAG" == "-s"'));
+    assert.ok(script.includes('opencode -s "$SESSION_ID"'));
+  });
+
+  it("launches opencode -c when given -c", () => {
+    const script = readFileSync(runtimePath, "utf8");
+    assert.ok(script.includes('SESSION_FLAG" == "-c"'));
+    assert.ok(script.includes("opencode -c"));
+  });
+
+  it("launches plain opencode when no session flag is given", () => {
+    const script = readFileSync(runtimePath, "utf8");
+    assert.ok(/else\s*\n\s*echo.*new session/.test(script.replace(/\r/g, "")));
+    assert.ok(script.includes("opencode\n") || script.includes("opencode \n") || script.match(/^opencode$/m));
   });
 
   it("conditionally runs graymatter and openspec", () => {
@@ -28,5 +44,10 @@ describe("omnicode-runtime.sh", () => {
     assert.ok(script.includes("if command -v openspec"));
     assert.ok(script.includes("graymatter not found; skipping"));
     assert.ok(script.includes("openspec not found; skipping"));
+  });
+
+  it("runs omniroute with --no-open", () => {
+    const script = readFileSync(runtimePath, "utf8");
+    assert.ok(script.includes("omniroute --no-open"));
   });
 });

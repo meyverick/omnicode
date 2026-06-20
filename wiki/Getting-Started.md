@@ -49,8 +49,7 @@ This will:
 2. Run `graymatter init --only opencode` if GrayMatter is installed; warn otherwise.
 3. Run `openspec init --force --tools opencode` if OpenSpec is installed; warn otherwise.
 4. Start `omniroute --no-open` in the background, or reuse an already running instance.
-5. Resolve or create `.opencode/session.id` in the current directory.
-6. Launch `opencode -s <session_id>`.
+5. Launch OpenCode with the resolved session argument (see below).
 
 When OpenCode exits and no other OpenCode process is running, the OmniRoute process that `omnicode` started is stopped automatically.
 
@@ -60,7 +59,9 @@ When OpenCode exits and no other OpenCode process is running, the OmniRoute proc
 omnicode -s <session_id>
 ```
 
-This writes the session ID to `.opencode/session.id` and launches OpenCode with it.
+This launches OpenCode with `opencode -s <session_id>`. OpenCode will error if that session does not exist.
+
+Without `-s`, `omnicode` continues the most recent session for the current directory (`opencode -c`) if one exists, or starts a new session otherwise.
 
 ## Uninstall
 

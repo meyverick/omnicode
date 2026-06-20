@@ -1,18 +1,18 @@
 #!/usr/bin/env node
 import { execSync } from "node:child_process";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { commandExists } from "../installer/lib.js";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const runtimeScript = join(__dirname, "omnicode-runtime.sh");
 
-function printUsage() {
+export function printUsage() {
   console.log(`Usage: omnicode [-s <session_id>]`);
 }
 
-function parseArgs(argv) {
+export function parseArgs(argv) {
   let sessionId = null;
   for (let i = 2; i < argv.length; i++) {
     const arg = argv[i];
@@ -37,6 +37,35 @@ function parseArgs(argv) {
   return { sessionId };
 }
 
+export function hasOpenCodeSessions() {
+  try {
+    const output = execSync("opencode session list", {
+      encoding: "utf8",
+      cwd: process.cwd(),
+      stdio: ["pipe", "pipe", "ignore"],
+    });
+    return /ses_[A-Za-z0-9]+/.test(output);
+  } catch {
+    return false;
+  }
+}
+
+export function resolveSessionMode(sessionId, sessionsExist = hasOpenCodeSessions()) {
+  if (sessionId) return { flag: "-s", id: sessionId };
+  if (sessionsExist) return { flag: "-c", id: null };
+  return { flag: null, id: null };
+}
+
+export function buildRuntimeArgs(mode) {
+  const args = [runtimeScript];
+  if (mode.flag === "-s") {
+    args.push("-s", mode.id);
+  } else if (mode.flag === "-c") {
+    args.push("-c");
+  }
+  return args;
+}
+
 function main() {
   const missing = ["opencode", "omniroute"].filter((cmd) => !commandExists(cmd));
   if (missing.length > 0) {
@@ -46,8 +75,8 @@ function main() {
   }
 
   const args = parseArgs(process.argv);
-  const childArgs = [runtimeScript];
-  if (args.sessionId) childArgs.push(args.sessionId);
+  const mode = resolveSessionMode(args.sessionId);
+  const childArgs = buildRuntimeArgs(mode);
 
   try {
     execSync("bash", childArgs, {
@@ -61,4 +90,7 @@ function main() {
   }
 }
 
-main();
+const isMain = import.meta.url === pathToFileURL(process.argv[1] || "").href;
+if (isMain) {
+  main();
+}

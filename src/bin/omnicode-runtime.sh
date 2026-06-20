@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SESSION_ID="${1:-}"
+SESSION_FLAG="${1:-}"
+SESSION_ID="${2:-}"
 RUNTIME_DIR="$HOME/.local/share/omnicode"
 LOG_FILE="$RUNTIME_DIR/omniroute.log"
 PID_FILE="$RUNTIME_DIR/omniroute.pid"
@@ -11,18 +12,6 @@ OMNI_CHECK_DELAY=1
 export PATH="$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
 
 mkdir -p "$RUNTIME_DIR"
-
-if [[ -z "$SESSION_ID" ]]; then
-  if [[ -f ".opencode/session.id" ]]; then
-    SESSION_ID="$(cat ".opencode/session.id" | tr -d '[:space:]')"
-  fi
-
-  if [[ -z "$SESSION_ID" ]]; then
-    mkdir -p ".opencode"
-    SESSION_ID="$(cat /proc/sys/kernel/random/uuid 2>/dev/null || uuidgen 2>/dev/null || python3 -c 'import uuid; print(uuid.uuid4())')"
-    echo "$SESSION_ID" > ".opencode/session.id"
-  fi
-fi
 
 is_pid_alive() {
   local pid="${1:-}"
@@ -100,5 +89,13 @@ fi
 
 start_omniroute
 
-echo "[omnicode] launching opencode (session: $SESSION_ID)"
-opencode -s "$SESSION_ID"
+if [[ "$SESSION_FLAG" == "-s" && -n "$SESSION_ID" ]]; then
+  echo "[omnicode] launching opencode (session: $SESSION_ID)"
+  opencode -s "$SESSION_ID"
+elif [[ "$SESSION_FLAG" == "-c" ]]; then
+  echo "[omnicode] launching opencode (continue last session)"
+  opencode -c
+else
+  echo "[omnicode] launching opencode (new session)"
+  opencode
+fi

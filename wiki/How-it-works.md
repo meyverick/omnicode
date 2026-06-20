@@ -5,16 +5,16 @@
 When you run `omnicode`, the npm-managed `src/bin/omnicode.js` entrypoint:
 
 1. Verifies that `opencode` and `omniroute` are on `PATH`; exits with an error if either is missing.
-2. Delegates to `src/bin/omnicode-runtime.sh` for process lifecycle management.
+2. Resolves the session launch mode (see [Session resolution](#session-resolution)).
+3. Delegates to `src/bin/omnicode-runtime.sh` for process lifecycle management.
 
 The Bash runtime wrapper then:
 
 1. Runs `graymatter init --only opencode` if GrayMatter is installed; prints a warning otherwise.
 2. Runs `openspec init --force --tools opencode` if OpenSpec is installed; prints a warning otherwise.
 3. Starts or reuses `omniroute --no-open` in the background.
-4. Resolves `.opencode/session.id`.
-5. Launches `opencode -s <session_id>`.
-6. Cleans up the OmniRoute process it started on exit.
+4. Launches OpenCode with the resolved session argument.
+5. Cleans up the OmniRoute process it started on exit.
 
 ## Background OmniRoute lifecycle
 
@@ -24,16 +24,12 @@ OmniRoute is started with `nohup omniroute --no-open >> ~/.local/share/omnicode/
 - If OmniRoute is already running, the existing process is reused.
 - Only the OmniRoute process started by `omnicode` is stopped when OpenCode exits and no other OpenCode process remains.
 
-## Session persistence
+## Session resolution
 
-`omnicode` stores the OpenCode session ID in a project-local file:
+`omnicode` does not invent or persist session IDs. OpenCode manages its own sessions. The launch mode is resolved as follows:
 
-```text
-.opencode/session.id
-```
+- If you pass `-s <session_id>`, `omnicode` launches `opencode -s <session_id>` directly. OpenCode will report an error if that session does not exist.
+- If you pass nothing and at least one OpenCode session exists for the current directory, `omnicode` launches `opencode -c` to continue the most recent session.
+- If you pass nothing and no session exists, `omnicode` launches `opencode` so a new session is created.
 
-- If the file exists and is non-empty, its value is used.
-- If the file is missing or empty, `.opencode/` is created and a UUID is generated and written to the file.
-- If you pass `-s <session_id>`, the file is updated with that value.
-
-This means each directory you run `omnicode` in can have its own persistent OpenCode session.
+Session existence is detected by running `opencode session list` and checking for session IDs in the output.
