@@ -11,6 +11,12 @@
 | `~/.local/share/omnicode/omniroute.log` | OmniRoute background log |
 | `~/.local/share/omnicode/omniroute.pid` | OmniRoute PID tracking |
 
+## Paths read
+
+| Path | Purpose |
+|---|---|
+| `~/.local/share/opencode/opencode.db` | Read latest OpenCode session for the current directory |
+
 ## Environment overrides
 
 | Variable | Effect |

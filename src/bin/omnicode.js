@@ -1,8 +1,9 @@
 #!/usr/bin/env node
-import { execSync, spawn } from "node:child_process";
-import { readFileSync, realpathSync } from "node:fs";
+import { execFileSync, spawn } from "node:child_process";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import os from "node:os";
 
 import { commandExists } from "../installer/lib.js";
 
@@ -11,7 +12,7 @@ const runtimeScript = join(__dirname, "omnicode-runtime.sh");
 const packageJsonPath = join(__dirname, "..", "..", "package.json");
 
 export function printUsage() {
-  console.log(`Usage: omnicode [-s <session_id>] [--version]`);
+  console.log(`Usage: omnicode [-s <session_id>] [-c] [--version]`);
 }
 
 export function getVersion() {
@@ -21,6 +22,7 @@ export function getVersion() {
 
 export function parseArgs(argv) {
   let sessionId = null;
+  let continueSession = false;
   for (let i = 2; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === "-h" || arg === "--help") {
@@ -30,6 +32,10 @@ export function parseArgs(argv) {
     if (arg === "-v" || arg === "--version") {
       console.log(getVersion());
       process.exit(0);
+    }
+    if (arg === "-c" || arg === "--continue") {
+      continueSession = true;
+      continue;
     }
     if (arg === "-s") {
       sessionId = argv[++i];
@@ -45,32 +51,37 @@ export function parseArgs(argv) {
       process.exit(2);
     }
   }
-  return { sessionId };
+  return { sessionId, continueSession };
 }
 
-export function getLatestSessionId() {
+export function getLatestSessionId(directory = realpathSync(process.cwd())) {
+  const dbPath = join(os.homedir(), ".local", "share", "opencode", "opencode.db");
+  if (!existsSync(dbPath)) return null;
+
   try {
-    const output = execSync("opencode session list", {
+    const output = execFileSync("python3", [
+      "-c",
+      `import sqlite3, sys
+db_path, directory = sys.argv[1], sys.argv[2]
+conn = sqlite3.connect(db_path)
+row = conn.execute("SELECT id FROM session WHERE directory = ? ORDER BY time_updated DESC LIMIT 1", (directory,)).fetchone()
+if row:
+    print(row[0])`,
+      dbPath,
+      directory,
+    ], {
       encoding: "utf8",
-      cwd: process.cwd(),
       stdio: ["pipe", "pipe", "ignore"],
     });
-    const lines = output.split("\n").slice(2);
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed) continue;
-      const match = trimmed.match(/^(ses_[A-Za-z0-9]+)/);
-      if (match) return match[1];
-    }
+    return output.trim() || null;
   } catch {
-    // fall through to null
+    return null;
   }
-  return null;
 }
 
-export function resolveSessionMode(sessionId, latestSessionId = getLatestSessionId()) {
+export function resolveSessionMode(sessionId, continueSession = false, latestSessionId = getLatestSessionId()) {
   if (sessionId) return { flag: "-s", id: sessionId };
-  if (latestSessionId) return { flag: "-s", id: latestSessionId };
+  if ((continueSession || latestSessionId) && latestSessionId) return { flag: "-s", id: latestSessionId };
   return { flag: null, id: null };
 }
 
@@ -91,7 +102,7 @@ async function main() {
   }
 
   const args = parseArgs(process.argv);
-  const mode = resolveSessionMode(args.sessionId);
+  const mode = resolveSessionMode(args.sessionId, args.continueSession);
   const childArgs = buildRuntimeArgs(mode);
 
   return new Promise((resolve, reject) => {
