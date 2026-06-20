@@ -48,22 +48,29 @@ export function parseArgs(argv) {
   return { sessionId };
 }
 
-export function hasOpenCodeSessions() {
+export function getLatestSessionId() {
   try {
     const output = execSync("opencode session list", {
       encoding: "utf8",
       cwd: process.cwd(),
       stdio: ["pipe", "pipe", "ignore"],
     });
-    return /ses_[A-Za-z0-9]+/.test(output);
+    const lines = output.split("\n").slice(2);
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      const match = trimmed.match(/^(ses_[A-Za-z0-9]+)/);
+      if (match) return match[1];
+    }
   } catch {
-    return false;
+    // fall through to null
   }
+  return null;
 }
 
-export function resolveSessionMode(sessionId, sessionsExist = hasOpenCodeSessions()) {
+export function resolveSessionMode(sessionId, latestSessionId = getLatestSessionId()) {
   if (sessionId) return { flag: "-s", id: sessionId };
-  if (sessionsExist) return { flag: "-c", id: null };
+  if (latestSessionId) return { flag: "-s", id: latestSessionId };
   return { flag: null, id: null };
 }
 
@@ -71,8 +78,6 @@ export function buildRuntimeArgs(mode) {
   const args = [runtimeScript];
   if (mode.flag === "-s") {
     args.push("-s", mode.id);
-  } else if (mode.flag === "-c") {
-    args.push("-c");
   }
   return args;
 }

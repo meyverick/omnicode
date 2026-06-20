@@ -61,7 +61,7 @@ omnicode -s <session_id>
 
 This launches OpenCode with `opencode -s <session_id>`. OpenCode will error if that session does not exist.
 
-Without `-s`, `omnicode` continues the most recent session for the current directory with `opencode -c` if one exists, or starts a new session otherwise.
+Without `-s`, `omnicode` reads the latest session ID from `opencode session list` for the current directory and continues it with `opencode -s <session_id>`, or starts a new session if none exists.
 
 ## Uninstall
 
