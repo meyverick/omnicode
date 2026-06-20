@@ -92,6 +92,9 @@ start_omniroute
 if [[ "$SESSION_FLAG" == "-s" && -n "$SESSION_ID" ]]; then
   echo "[omnicode] launching opencode (session: $SESSION_ID)"
   opencode -s "$SESSION_ID"
+elif [[ "$SESSION_FLAG" == "-c" ]]; then
+  echo "[omnicode] launching opencode (continue last session)"
+  opencode -c
 else
   echo "[omnicode] launching opencode (new session)"
   opencode
