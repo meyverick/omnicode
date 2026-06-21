@@ -5,11 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.0.7] - 2026-06-21
+## [0.1.0] - 2026-06-21
+
+### Changed
+
+- **Cross-platform runtime**: Replaced `omnicode-runtime.sh` (bash) with `omnicode-runtime.js` (Node.js). OmniRoute lifecycle, parallel init, and OpenCode launch now use `child_process.spawn` with `detached: true` instead of bash `nohup`/`pgrep`/`kill`/`wait`.
+- Platform-aware `commandExists()`: uses `where` on Windows, `which` on Unix.
+- Platform-aware `isProcessRunning()`: uses `tasklist` on Windows, `pgrep -f` on Unix.
+- Data directory resolved via `os.homedir()` for all platforms (`~/.local/share/omnicode`).
+- Opencode DB path resolved via `os.homedir()` for all platforms (`~/.local/share/opencode/opencode.db`).
+- Package description and keywords updated to reflect cross-platform support.
 
 ### Fixed
 
-- Fixed process detection for Node.js-based tools (omniroute, opencode): switched `pgrep -x` to `pgrep -f` so command-line scripts are found by their full command line rather than process name, which is always `node`.
+- Fixed process detection for Node.js-based tools: switched `pgrep -x` to `pgrep -f` so command-line scripts (which always appear as `node`) are found by their command line.
 
 ## [0.0.6] - 2026-06-21
 

@@ -1,7 +1,7 @@
 {
   "name": "@meyverick/omnicode",
-  "version": "0.0.7",
-  "description": "Ubuntu command-line entrypoint for OpenCode through OmniRoute",
+  "version": "0.1.0",
+  "description": "Cross-platform command-line entrypoint for OpenCode through OmniRoute",
   "type": "module",
   "bin": {
     "omnicode": "src/bin/omnicode.js"
