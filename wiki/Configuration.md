@@ -21,8 +21,8 @@
 
 ## Package structure
 
-- `src/bin/` — CLI entrypoint (`omnicode.js`) and Node.js runtime module (`omnicode-runtime.js`).
-- `src/installer/` — cross-platform runtime helpers.
-- `test/` — package tests.
-- `wiki/` — full technical wiki, tracked in the main repository.
-- `references/` — upstream reference repositories as Git submodules.
+- `src/bin/`: CLI entrypoint (`omnicode.js`) and Node.js runtime module (`omnicode-runtime.js`).
+- `src/installer/`: cross-platform runtime helpers.
+- `test/`: package tests.
+- `wiki/`: full technical wiki, tracked in the main repository.
+- `references/`: upstream reference repositories as Git submodules.
