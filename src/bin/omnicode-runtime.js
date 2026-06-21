@@ -121,10 +121,6 @@ function stopOmnirouteIfIdle(pidFile) {
       } else {
         try { process.kill(-pid, "SIGTERM"); } catch {}
       }
-      for (let i = 0; i < 10; i++) {
-        if (!isPidAlive(pid)) break;
-        try { process.kill(pid, 0); } catch { break; }
-      }
     }
     try { unlinkSync(pidFile); } catch {}
   }
