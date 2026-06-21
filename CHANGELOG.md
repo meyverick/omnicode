@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.6] - 2026-06-21
+
+### Security
+
+- Added 128-character session ID length limit.
+- Set PID directory permissions to `0o700`.
+- Added process tree cleanup: negative PID on Unix, `taskkill /T` on Windows.
+
+### Performance
+
+- Exported shared `isProcessRunning()` from `lib.js`; deleted local copies in `omnicode.js` and `omnicode-runtime.js`.
+- Parallelized OmniRoute startup with tool init using `Promise.all`.
+- Replaced busy-wait cleanup polling with interval-based backoff (max 10 retries).
+
+### Reliability
+
+- Added 30-second timeout to tool initialization via `Promise.race`.
+- Fixed `openSync` file descriptor leak on `spawn` failure.
+- Windows process detection now checks `.cmd` and `.bat` extensions in addition to `.exe`.
+
 ## [0.0.5] - 2026-06-21
 
 ### Security
