@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 
-import { commandExists, getDataDir, isProcessRunning, isPidAlive } from "../installer/lib.js";
+import { commandExists, getDataDir, isProcessRunning, isPidAlive, isProcessRunningAsync } from "../installer/lib.js";
 
 const MAX_OMNI_WAIT = 30;
 const OMNI_CHECK_DELAY = 1000;
@@ -94,7 +94,7 @@ async function waitForOmniroute(pid, logFile) {
       process.exit(1);
     }
 
-    if (isProcessRunning("omniroute")) {
+    if (await isProcessRunningAsync("omniroute")) {
       console.log(`[omnicode] omniroute started (pid: ${pid})`);
       return;
     }

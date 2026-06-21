@@ -1,4 +1,7 @@
-import { execFileSync } from "node:child_process";
+import { execFileSync, execFile } from "node:child_process";
+import { promisify } from "node:util";
+
+const execFileAsync = promisify(execFile);
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import os from "node:os";
@@ -52,4 +55,28 @@ export function getOpencodeDbPath() {
   const dbPath = join(os.homedir(), ".local", "share", "opencode", "opencode.db");
   if (!existsSync(dbPath)) return null;
   return dbPath;
+}
+
+
+export async function isProcessRunningAsync(name) {
+  try {
+    if (isWindows) {
+      const extensions = [".exe", ".cmd", ".bat"];
+      for (const ext of extensions) {
+        try {
+          const { stdout } = await execFileAsync("tasklist", ["/FI", `IMAGENAME eq ${name}${ext}`, "/NH"], {
+            encoding: "utf8",
+          });
+          if (stdout.includes(`${name}${ext}`)) return true;
+        } catch {
+          // ignore
+        }
+      }
+      return false;
+    }
+    await execFileAsync("pgrep", ["-x", name]);
+    return true;
+  } catch {
+    return false;
+  }
 }
