@@ -1,17 +1,15 @@
 #!/usr/bin/env node
-import { execFileSync } from "node:child_process";
 import { readFileSync, realpathSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { commandExists, getOpencodeDbPath } from "../installer/lib.js";
+import { commandExists, getOpencodeDbPath, isProcessRunning } from "../installer/lib.js";
 import { runRuntime } from "./omnicode-runtime.js";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const packageJsonPath = join(__dirname, "..", "..", "package.json");
 
-const SESSION_ID_RE = /^[a-zA-Z0-9_-]+$/;
-const isWindows = process.platform === "win32";
+const SESSION_ID_RE = /^(?=.{1,128}$)[a-zA-Z0-9_-]+$/;
 
 let DatabaseSync;
 try {
@@ -31,22 +29,6 @@ export function getVersion() {
   const pkg = JSON.parse(readFileSync(packageJsonPath, "utf8"));
   _cachedVersion = pkg.version;
   return _cachedVersion;
-}
-
-export function isProcessRunning(name) {
-  try {
-    if (isWindows) {
-      const out = execFileSync("tasklist", ["/FI", `IMAGENAME eq ${name}.exe`, "/NH"], {
-        stdio: ["ignore", "pipe", "ignore"],
-        encoding: "utf8",
-      });
-      return out.includes(`${name}.exe`);
-    }
-    execFileSync("pgrep", ["-x", name], { stdio: "ignore" });
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 export function getProcessStatus() {

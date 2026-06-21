@@ -30,9 +30,9 @@ The `getVersion()` function SHALL cache the version string after the first `read
 
 ### Requirement: Parallel GrayMatter and OpenSpec initialization
 
-The runtime script SHALL initialize GrayMatter and OpenSpec concurrently instead of sequentially.
+The runtime SHALL initialize GrayMatter and OpenSpec concurrently instead of sequentially.
 
 #### Scenario: Parallel init reduces startup time
 
 - **WHEN** both `graymatter` and `openspec` are installed
-- **THEN** their `init` commands SHALL be launched in parallel using `&` and joined with `wait`
+- **THEN** their `init` commands SHALL be launched in parallel using `Promise.all` and awaited before starting OmniRoute

@@ -1,66 +1,45 @@
-import { spawn, execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, openSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
+import { spawn } from "node:child_process";
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
-import os from "node:os";
 
-import { commandExists, getDataDir } from "../installer/lib.js";
+import { commandExists, getDataDir, isProcessRunning, isPidAlive } from "../installer/lib.js";
 
-const isWindows = process.platform === "win32";
 const MAX_OMNI_WAIT = 30;
 const OMNI_CHECK_DELAY = 1000;
-
-function isProcessRunning(name) {
-  try {
-    if (isWindows) {
-      const out = execFileSync("tasklist", ["/FI", `IMAGENAME eq ${name}.exe`, "/NH"], {
-        stdio: ["ignore", "pipe", "ignore"],
-        encoding: "utf8",
-      });
-      return out.includes(`${name}.exe`);
-    }
-    execFileSync("pgrep", ["-x", name], { stdio: "ignore" });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function isPidAlive(pid) {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function initTool(name, args, logPath) {
-  return new Promise((resolve) => {
-    if (!commandExists(name)) {
-      console.log(`[omnicode] ${name}: not installed, skipping`);
-      resolve();
-      return;
-    }
-    console.log(`[omnicode] ${name}: initializing`);
-    const log = openSync(logPath, "w");
+async function initTool(name, args, logPath) {
+  if (!commandExists(name)) {
+    console.log(`[omnicode] ${name}: not installed, skipping`);
+    return;
+  }
+  console.log(`[omnicode] ${name}: initializing`);
+  let log;
+  try {
+    log = openSync(logPath, "w");
     const child = spawn(name, args, { stdio: ["ignore", log, log] });
-    child.on("close", (code) => {
-      if (code === 0) {
-        console.log(`[omnicode] ${name}: ready`);
-      } else {
-        console.log(`[omnicode] WARNING: ${name} init failed; continuing. Log: ${logPath}`);
-      }
-      resolve();
-    });
-    child.on("error", () => {
+    const result = await Promise.race([
+      new Promise((resolve) => {
+        child.on("close", resolve);
+        child.on("error", () => resolve(null));
+      }),
+      new Promise((resolve) => {
+        setTimeout(() => { child.kill(); resolve(null); }, 30000);
+      }),
+    ]);
+    if (result === null) {
+      console.log(`[omnicode] WARNING: ${name} init timed out; continuing. Log: ${logPath}`);
+    } else if (result === 0) {
+      console.log(`[omnicode] ${name}: ready`);
+    } else {
       console.log(`[omnicode] WARNING: ${name} init failed; continuing. Log: ${logPath}`);
-      resolve();
-    });
-  });
+    }
+  } catch {
+    if (log !== undefined) try { closeSync(log); } catch {}
+  }
 }
 
 async function initTools(dataDir) {
@@ -137,9 +116,13 @@ function stopOmnirouteIfIdle(pidFile) {
     } catch {}
     if (pid && isPidAlive(pid)) {
       console.log(`[omnicode] no opencode left -> stopping omniroute (pid: ${pid})`);
-      try { process.kill(pid, "SIGTERM"); } catch {}
-      const deadline = Date.now() + 5000;
-      while (isPidAlive(pid) && Date.now() < deadline) {
+      if (process.platform === "win32") {
+        spawn("taskkill", ["/T", "/F", "/PID", String(pid)], { stdio: "ignore" });
+      } else {
+        try { process.kill(-pid, "SIGTERM"); } catch {}
+      }
+      for (let i = 0; i < 10; i++) {
+        if (!isPidAlive(pid)) break;
         try { process.kill(pid, 0); } catch { break; }
       }
     }
@@ -149,7 +132,7 @@ function stopOmnirouteIfIdle(pidFile) {
 
 export async function runRuntime(mode) {
   const dataDir = getDataDir();
-  mkdirSync(dataDir, { recursive: true });
+  mkdirSync(dataDir, { recursive: true, mode: 0o700 });
 
   const logFile = join(dataDir, "omniroute.log");
   const pidFile = join(dataDir, "omniroute.pid");
@@ -163,12 +146,12 @@ export async function runRuntime(mode) {
   process.on("SIGINT", () => { cleanup(); process.exit(0); });
   process.on("SIGTERM", () => { cleanup(); process.exit(0); });
 
-  await initTools(dataDir);
-
   const pid = startOmniroute(dataDir, logFile, pidFile);
-  if (pid !== null) {
-    await waitForOmniroute(pid, logFile);
-  }
+
+  await Promise.all([
+    pid !== null ? waitForOmniroute(pid, logFile) : Promise.resolve(),
+    initTools(dataDir),
+  ]);
 
   if (mode.flag === "-s" && mode.id) {
     console.log(`[omnicode] launching opencode (session: ${mode.id})`);

@@ -4,7 +4,8 @@ import { execSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { join, dirname } from "node:path";
 
-import { parseArgs, resolveSessionMode, getVersion, printStatus, isProcessRunning, getLatestSessionId } from "../src/bin/omnicode.js";
+import { parseArgs, resolveSessionMode, getVersion, printStatus, getLatestSessionId } from "../src/bin/omnicode.js";
+import { isProcessRunning } from "../src/installer/lib.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const binPath = join(__dirname, "..", "src", "bin", "omnicode.js");
@@ -58,6 +59,14 @@ describe("omnicode.js CLI integration", () => {
   it("rejects session ID with spaces", () => {
     assert.throws(
       () => execSync(`node "${binPath}" -s 'foo bar'`, { encoding: "utf8" }),
+      /invalid session ID format/
+    );
+  });
+
+  it("rejects session ID longer than 128 characters", () => {
+    const longId = "a".repeat(129);
+    assert.throws(
+      () => execSync(`node "${binPath}" -s ${longId}`, { encoding: "utf8" }),
       /invalid session ID format/
     );
   });

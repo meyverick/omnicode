@@ -1,10 +1,4 @@
-# process-cleanup-hardening
-
-## Purpose
-
-Ensures robust process lifecycle management: graceful termination, input validation, and PID-reuse safety during cleanup.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Graceful OmniRoute termination
 

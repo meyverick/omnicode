@@ -15,6 +15,35 @@ export function commandExists(command) {
   }
 }
 
+export function isProcessRunning(name) {
+  try {
+    if (isWindows) {
+      const extensions = [".exe", ".cmd", ".bat"];
+      for (const ext of extensions) {
+        const out = execFileSync("tasklist", ["/FI", `IMAGENAME eq ${name}${ext}`, "/NH"], {
+          stdio: ["ignore", "pipe", "ignore"],
+          encoding: "utf8",
+        });
+        if (out.includes(`${name}${ext}`)) return true;
+      }
+      return false;
+    }
+    execFileSync("pgrep", ["-x", name], { stdio: "ignore" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function isPidAlive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function getDataDir() {
   return join(os.homedir(), ".local", "share", "omnicode");
 }

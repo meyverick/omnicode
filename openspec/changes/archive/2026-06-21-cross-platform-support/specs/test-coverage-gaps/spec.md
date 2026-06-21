@@ -1,20 +1,4 @@
-# test-coverage-gaps
-
-## Purpose
-
-Covers test gaps for standalone unit tests of core utility functions, eliminating external tool dependencies.
-
-## Requirements
-
-### Requirement: Standalone unit tests for `getVersion()`
-
-The test suite SHALL include unit tests for `getVersion()` that do not require external tools (opencode, omniroute) on PATH.
-
-#### Scenario: getVersion returns the current version string
-
-- **WHEN** a test calls `getVersion()`
-- **THEN** it SHALL return the version string from `package.json`
-- **THEN** no external commands SHALL be spawned
+## MODIFIED Requirements
 
 ### Requirement: Standalone unit tests for `isProcessRunning()`
 
@@ -29,15 +13,6 @@ The test suite SHALL include unit tests for `isProcessRunning()` that do not spa
 
 - **WHEN** no process named `"nonexistent-xyz-999"` is running
 - **THEN** `isProcessRunning("nonexistent-xyz-999")` SHALL return `false`
-
-### Requirement: Standalone unit tests for `getLatestSessionId()`
-
-The test suite SHALL include a unit test for `getLatestSessionId()` that validates behavior when the OpenCode database does not exist.
-
-#### Scenario: getLatestSessionId returns null when no DB exists
-
-- **WHEN** `~/.local/share/opencode/opencode.db` does not exist
-- **THEN** `getLatestSessionId()` SHALL return `null`
 
 ### Requirement: Standalone unit tests for `commandExists()`
 
