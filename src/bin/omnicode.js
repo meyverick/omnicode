@@ -1,29 +1,47 @@
 #!/usr/bin/env node
-import { execFileSync, spawn } from "node:child_process";
-import { existsSync, readFileSync, realpathSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { readFileSync, realpathSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import os from "node:os";
 
-import { commandExists } from "../installer/lib.js";
+import { commandExists, getOpencodeDbPath } from "../installer/lib.js";
+import { runRuntime } from "./omnicode-runtime.js";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
-const runtimeScript = join(__dirname, "omnicode-runtime.sh");
 const packageJsonPath = join(__dirname, "..", "..", "package.json");
 
 const SESSION_ID_RE = /^[a-zA-Z0-9_-]+$/;
+const isWindows = process.platform === "win32";
+
+let DatabaseSync;
+try {
+  ({ DatabaseSync } = await import("node:sqlite"));
+} catch {
+  DatabaseSync = null;
+}
 
 export function printUsage() {
   console.log(`Usage: omnicode [-s <session_id>] [-c] [--status] [--version]`);
 }
 
+let _cachedVersion = null;
+
 export function getVersion() {
+  if (_cachedVersion !== null) return _cachedVersion;
   const pkg = JSON.parse(readFileSync(packageJsonPath, "utf8"));
-  return pkg.version;
+  _cachedVersion = pkg.version;
+  return _cachedVersion;
 }
 
 export function isProcessRunning(name) {
   try {
+    if (isWindows) {
+      const out = execFileSync("tasklist", ["/FI", `IMAGENAME eq ${name}.exe`, "/NH"], {
+        stdio: ["ignore", "pipe", "ignore"],
+        encoding: "utf8",
+      });
+      return out.includes(`${name}.exe`);
+    }
     execFileSync("pgrep", ["-x", name], { stdio: "ignore" });
     return true;
   } catch {
@@ -78,7 +96,7 @@ export function parseArgs(argv) {
       process.exit(2);
     }
 
-    if (sessionId && !SESSION_ID_RE.test(sessionId)) {
+    if (!sessionId || !SESSION_ID_RE.test(sessionId)) {
       console.error(`[omnicode] ERROR: invalid session ID format`);
       process.exit(2);
     }
@@ -87,11 +105,11 @@ export function parseArgs(argv) {
 }
 
 export async function getLatestSessionId(directory = realpathSync(process.cwd())) {
-  const dbPath = join(os.homedir(), ".local", "share", "opencode", "opencode.db");
-  if (!existsSync(dbPath)) return null;
+  const dbPath = getOpencodeDbPath();
+  if (!dbPath) return null;
 
   try {
-    const { DatabaseSync } = await import("node:sqlite");
+    if (!DatabaseSync) return null;
     const db = new DatabaseSync(dbPath, { readOnly: true });
     const row = db.prepare(
       "SELECT id FROM session WHERE directory = ? ORDER BY time_updated DESC LIMIT 1"
@@ -110,14 +128,6 @@ export async function resolveSessionMode(sessionId, latestSessionId = null) {
   return { flag: null, id: null };
 }
 
-export function buildRuntimeArgs(mode) {
-  const args = [runtimeScript];
-  if (mode.flag === "-s") {
-    args.push("-s", mode.id);
-  }
-  return args;
-}
-
 async function main() {
   const args = parseArgs(process.argv);
 
@@ -129,22 +139,7 @@ async function main() {
   }
 
   const mode = await resolveSessionMode(args.sessionId);
-  const childArgs = buildRuntimeArgs(mode);
-
-  return new Promise((resolve, reject) => {
-    const child = spawn("bash", childArgs, {
-      stdio: "inherit",
-      cwd: process.cwd(),
-    });
-    child.on("error", reject);
-    child.on("close", (code) => {
-      if (code !== 0) {
-        process.exit(code);
-      } else {
-        resolve();
-      }
-    });
-  });
+  await runRuntime(mode);
 }
 
 function isMainModule() {

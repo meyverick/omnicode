@@ -4,7 +4,7 @@ import { execSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { join, dirname } from "node:path";
 
-import { parseArgs, resolveSessionMode, buildRuntimeArgs, getVersion, printStatus } from "../src/bin/omnicode.js";
+import { parseArgs, resolveSessionMode, getVersion, printStatus, isProcessRunning, getLatestSessionId } from "../src/bin/omnicode.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const binPath = join(__dirname, "..", "src", "bin", "omnicode.js");
@@ -113,22 +113,14 @@ describe("resolveSessionMode", () => {
   });
 });
 
-describe("buildRuntimeArgs", () => {
-  it("builds -s args", () => {
-    const args = buildRuntimeArgs({ flag: "-s", id: "ses_abc" });
-    assert.ok(args.length >= 3);
-    assert.equal(args[1], "-s");
-    assert.equal(args[2], "ses_abc");
+describe("isProcessRunning", () => {
+  it("returns true for a known-running process", () => {
+    const known = process.platform === "win32" ? "cmd" : "bash";
+    assert.equal(isProcessRunning(known), true);
   });
 
-  it("does not build -c args", () => {
-    const args = buildRuntimeArgs({ flag: "-c", id: null });
-    assert.ok(args.length === 1);
-  });
-
-  it("builds no-flag args", () => {
-    const args = buildRuntimeArgs({ flag: null, id: null });
-    assert.ok(args.length === 1);
+  it("returns false for a nonexistent process", () => {
+    assert.equal(isProcessRunning("nonexistent-xyz-999"), false);
   });
 });
 
@@ -143,5 +135,26 @@ describe("printStatus", () => {
       console.log = originalLog;
     }
     assert.deepEqual(lines, ["[omnicode] opencode: running", "[omnicode] omniroute: stopped"]);
+  });
+});
+
+describe("getVersion", () => {
+  it("returns the version string from package.json", () => {
+    const version = getVersion();
+    assert.equal(typeof version, "string");
+    assert.match(version, /^\d+\.\d+\.\d+/);
+  });
+
+  it("caches the version on repeated calls", () => {
+    const v1 = getVersion();
+    const v2 = getVersion();
+    assert.equal(v1, v2);
+  });
+});
+
+describe("getLatestSessionId", () => {
+  it("returns null when the database does not exist", async () => {
+    const result = await getLatestSessionId("/nonexistent/path/that/does/not/exist");
+    assert.equal(result, null);
   });
 });

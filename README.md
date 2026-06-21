@@ -1,6 +1,6 @@
 # omnicode
 
-The Ubuntu command-line entrypoint for running OpenCode through OmniRoute.
+The cross-platform command-line entrypoint for running OpenCode through OmniRoute.
 
 ## What is omnicode?
 
