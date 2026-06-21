@@ -6,9 +6,9 @@ When you run `omnicode`, the npm-managed `src/bin/omnicode.js` entrypoint:
 
 1. Verifies that `opencode` and `omniroute` are on `PATH`; exits with an error if either is missing.
 2. Resolves the session launch mode (see [Session resolution](#session-resolution)).
-3. Delegates to `src/bin/omnicode-runtime.sh` for process lifecycle management.
+3. Calls the Node.js runtime module (`src/bin/omnicode-runtime.js`) directly — no bash intermediary.
 
-The Bash runtime wrapper then:
+The Node.js runtime then:
 
 1. Runs GrayMatter initialization quietly (output captured to `~/.local/share/omnicode/graymatter-init.log`).
 2. Runs OpenSpec initialization quietly (output captured to `~/.local/share/omnicode/openspec-init.log`).
@@ -18,7 +18,7 @@ The Bash runtime wrapper then:
 
 ## Background OmniRoute lifecycle
 
-OmniRoute is started with `nohup omniroute --no-open >> ~/.local/share/omnicode/omniroute.log 2>&1 &`.
+OmniRoute is started as a detached Node.js child process with stdout/stderr piped to `~/.local/share/omnicode/omniroute.log`.
 
 - Logs and PID files live under `~/.local/share/omnicode`.
 - If OmniRoute is already running, the existing process is reused.

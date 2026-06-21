@@ -1,8 +1,10 @@
 # Getting Started
 
+> **Platform note:** `omnicode` is written in Node.js and designed to work cross-platform, but it has only been developed and tested on **Ubuntu Linux**. Running on Windows, macOS, or other Linux distributions may uncover untested edge cases. Please report any issues you encounter.
+
 ## Requirements
 
-- Ubuntu Linux on AMD64/x86_64
+- Linux, macOS, or Windows
 - Node.js 22 or later (developed and tested on Node 26; OmniRoute requires Node >=22 <=24)
 - npm
 - [OpenCode](https://github.com/opencode-ai/opencode)

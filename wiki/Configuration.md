@@ -21,8 +21,8 @@
 
 ## Package structure
 
-- `src/bin/` — runtime command and Bash wrapper.
-- `src/installer/` — minimal runtime helpers.
+- `src/bin/` — CLI entrypoint (`omnicode.js`) and Node.js runtime module (`omnicode-runtime.js`).
+- `src/installer/` — cross-platform runtime helpers.
 - `test/` — package tests.
 - `wiki/` — full technical wiki, tracked in the main repository.
 - `references/` — upstream reference repositories as Git submodules.

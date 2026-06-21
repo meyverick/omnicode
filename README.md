@@ -4,7 +4,7 @@ The cross-platform command-line entrypoint for running OpenCode through OmniRout
 
 ## What is omnicode?
 
-`omnicode` is a thin wrapper that launches OpenCode through OmniRoute on Ubuntu. It expects you to install the underlying tools yourself, then handles optional GrayMatter and OpenSpec initialization, background OmniRoute lifecycle, and project-local OpenCode sessions.
+`omnicode` is a thin wrapper that launches OpenCode through OmniRoute. It expects you to install the underlying tools yourself, then handles optional GrayMatter and OpenSpec initialization, background OmniRoute lifecycle, and project-local OpenCode sessions. Developed and tested on Ubuntu Linux — cross-platform by design but untested on Windows, macOS, and other Linux distributions.
 
 ## Why
 
@@ -16,7 +16,8 @@ So I wrote this wrapper. It starts OmniRoute, inits GrayMatter and OpenSpec quie
 
 ## Features
 
-- Thin npm global command for Ubuntu.
+- Thin npm global command written in Node.js (no bash needed).
+- Cross-platform by design — developed and tested on Ubuntu Linux; untested on Windows, macOS, and other Linux distributions.
 - Automatic session resume per project using the OpenCode database.
 - Background OmniRoute lifecycle with cleanup when OpenCode exits.
 - Quiet GrayMatter and OpenSpec initialization with captured logs.
