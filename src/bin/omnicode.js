@@ -31,19 +31,26 @@ export function getVersion() {
   return _cachedVersion;
 }
 
-export function getProcessStatus() {
+export async function getProcessStatus() {
+  const [opencode, omniroute] = await Promise.all([
+    isProcessRunning("opencode"),
+    isProcessRunning("omniroute"),
+  ]);
   return {
-    opencode: isProcessRunning("opencode"),
-    omniroute: isProcessRunning("omniroute"),
+    opencode,
+    omniroute,
   };
 }
 
-export function printStatus(status = getProcessStatus()) {
+export async function printStatus(status = null) {
+  if (status === null) {
+    status = await getProcessStatus();
+  }
   console.log(`[omnicode] opencode: ${status.opencode ? "running" : "stopped"}`);
   console.log(`[omnicode] omniroute: ${status.omniroute ? "running" : "stopped"}`);
 }
 
-export function parseArgs(argv) {
+export async function parseArgs(argv) {
   let sessionId = null;
   let continueSession = false;
   for (let i = 2; i < argv.length; i++) {
@@ -57,7 +64,7 @@ export function parseArgs(argv) {
       process.exit(0);
     }
     if (arg === "--status" || arg === "status") {
-      printStatus();
+      await printStatus();
       process.exit(0);
     }
     if (arg === "-c" || arg === "--continue") {
@@ -111,9 +118,17 @@ export async function resolveSessionMode(sessionId, latestSessionId = null) {
 }
 
 async function main() {
-  const args = parseArgs(process.argv);
+  const args = await parseArgs(process.argv);
 
-  const missing = ["opencode", "omniroute"].filter((cmd) => !commandExists(cmd));
+  const [opencodeExists, omnirouteExists] = await Promise.all([
+    commandExists("opencode"),
+    commandExists("omniroute"),
+  ]);
+
+  const missing = [];
+  if (!opencodeExists) missing.push("opencode");
+  if (!omnirouteExists) missing.push("omniroute");
+
   if (missing.length > 0) {
     console.error(`[omnicode] ERROR: missing required tool(s): ${missing.join(", ")}`);
     console.error("[omnicode] Install them before running omnicode. See the README for instructions.");

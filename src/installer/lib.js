@@ -1,11 +1,23 @@
-import { execFileSync } from "node:child_process";
+import { execFileSync, execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import os from "node:os";
 
+const execFileAsync = promisify(execFile);
 const isWindows = process.platform === "win32";
 
-export function commandExists(command) {
+export async function commandExists(command) {
+  const tool = isWindows ? "where" : "which";
+  try {
+    await execFileAsync(tool, [command]);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function commandExistsSync(command) {
   const tool = isWindows ? "where" : "which";
   try {
     execFileSync(tool, [command], { stdio: "ignore" });
@@ -15,7 +27,32 @@ export function commandExists(command) {
   }
 }
 
-export function isProcessRunning(name) {
+export async function isProcessRunning(name) {
+  try {
+    if (isWindows) {
+      const extensions = [".exe", ".cmd", ".bat"];
+      const checks = extensions.map(async (ext) => {
+        try {
+          const { stdout } = await execFileAsync("tasklist", ["/FI", `IMAGENAME eq ${name}${ext}`, "/NH"], {
+            stdio: ["ignore", "pipe", "ignore"],
+            encoding: "utf8",
+          });
+          return stdout.includes(`${name}${ext}`);
+        } catch {
+          return false;
+        }
+      });
+      const results = await Promise.all(checks);
+      return results.some((r) => r);
+    }
+    await execFileAsync("pgrep", ["-x", name], { stdio: "ignore" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function isProcessRunningSync(name) {
   try {
     if (isWindows) {
       const extensions = [".exe", ".cmd", ".bat"];

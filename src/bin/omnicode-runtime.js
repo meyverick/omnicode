@@ -2,17 +2,18 @@ import { spawn } from "node:child_process";
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 
-import { commandExists, getDataDir, isProcessRunning, isPidAlive } from "../installer/lib.js";
+import { commandExists, getDataDir, isProcessRunning, isProcessRunningSync, isPidAlive } from "../installer/lib.js";
 
 const MAX_OMNI_WAIT = 30;
 const OMNI_CHECK_DELAY = 1000;
+const isWindows = process.platform === "win32";
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 async function initTool(name, args, logPath) {
-  if (!commandExists(name)) {
+  if (!(await commandExists(name))) {
     console.log(`[omnicode] ${name}: not installed, skipping`);
     return;
   }
@@ -52,13 +53,13 @@ async function initTools(dataDir) {
   ]);
 }
 
-function startOmniroute(dataDir, logFile, pidFile) {
-  if (isProcessRunning("omniroute")) {
+async function startOmniroute(dataDir, logFile, pidFile) {
+  if (await isProcessRunning("omniroute")) {
     console.log("[omnicode] omniroute already running");
     return null;
   }
 
-  if (existsSync(pidFile) || existsSync(pidFile)) {
+  if (existsSync(pidFile)) {
     let pid = null;
     try {
       pid = parseInt(readFileSync(pidFile, "utf8").trim(), 10);
@@ -94,7 +95,7 @@ async function waitForOmniroute(pid, logFile) {
       process.exit(1);
     }
 
-    if (isProcessRunning("omniroute")) {
+    if (await isProcessRunning("omniroute")) {
       console.log(`[omnicode] omniroute started (pid: ${pid})`);
       return;
     }
@@ -104,8 +105,8 @@ async function waitForOmniroute(pid, logFile) {
   process.exit(1);
 }
 
-function stopOmnirouteIfIdle(pidFile) {
-  if (isProcessRunning("opencode")) {
+async function stopOmnirouteIfIdle(pidFile) {
+  if (await isProcessRunning("opencode")) {
     return;
   }
 
@@ -116,7 +117,33 @@ function stopOmnirouteIfIdle(pidFile) {
     } catch {}
     if (pid && isPidAlive(pid)) {
       console.log(`[omnicode] no opencode left -> stopping omniroute (pid: ${pid})`);
-      if (process.platform === "win32") {
+      if (isWindows) {
+        spawn("taskkill", ["/T", "/F", "/PID", String(pid)], { stdio: "ignore" });
+      } else {
+        try { process.kill(-pid, "SIGTERM"); } catch {}
+      }
+      for (let i = 0; i < 10; i++) {
+        if (!isPidAlive(pid)) break;
+        try { process.kill(pid, 0); } catch { break; }
+      }
+    }
+    try { unlinkSync(pidFile); } catch {}
+  }
+}
+
+function stopOmnirouteIfIdleSync(pidFile) {
+  if (isProcessRunningSync("opencode")) {
+    return;
+  }
+
+  if (existsSync(pidFile)) {
+    let pid = null;
+    try {
+      pid = parseInt(readFileSync(pidFile, "utf8").trim(), 10);
+    } catch {}
+    if (pid && isPidAlive(pid)) {
+      console.log(`[omnicode] no opencode left -> stopping omniroute (pid: ${pid})`);
+      if (isWindows) {
         spawn("taskkill", ["/T", "/F", "/PID", String(pid)], { stdio: "ignore" });
       } else {
         try { process.kill(-pid, "SIGTERM"); } catch {}
@@ -142,11 +169,13 @@ export async function runRuntime(mode) {
   }
 
   const cleanup = () => stopOmnirouteIfIdle(pidFile);
-  process.on("exit", cleanup);
-  process.on("SIGINT", () => { cleanup(); process.exit(0); });
-  process.on("SIGTERM", () => { cleanup(); process.exit(0); });
+  const cleanupSync = () => stopOmnirouteIfIdleSync(pidFile);
 
-  const pid = startOmniroute(dataDir, logFile, pidFile);
+  process.on("exit", cleanupSync);
+  process.on("SIGINT", async () => { await cleanup(); process.exit(0); });
+  process.on("SIGTERM", async () => { await cleanup(); process.exit(0); });
+
+  const pid = await startOmniroute(dataDir, logFile, pidFile);
 
   await Promise.all([
     pid !== null ? waitForOmniroute(pid, logFile) : Promise.resolve(),

@@ -73,26 +73,26 @@ describe("omnicode.js CLI integration", () => {
 });
 
 describe("parseArgs", () => {
-  it("returns null sessionId when no -s is given", () => {
-    assert.deepEqual(parseArgs(["node", "omnicode.js"]), { sessionId: null, continueSession: false });
+  it("returns null sessionId when no -s is given", async () => {
+    assert.deepEqual(await parseArgs(["node", "omnicode.js"]), { sessionId: null, continueSession: false });
   });
 
-  it("parses -s <id>", () => {
-    assert.deepEqual(parseArgs(["node", "omnicode.js", "-s", "ses_abc"]), {
+  it("parses -s <id>", async () => {
+    assert.deepEqual(await parseArgs(["node", "omnicode.js", "-s", "ses_abc"]), {
       sessionId: "ses_abc",
       continueSession: false,
     });
   });
 
-  it("parses -s<id>", () => {
-    assert.deepEqual(parseArgs(["node", "omnicode.js", "-ses_abc"]), {
+  it("parses -s<id>", async () => {
+    assert.deepEqual(await parseArgs(["node", "omnicode.js", "-ses_abc"]), {
       sessionId: "es_abc",
       continueSession: false,
     });
   });
 
-  it("parses -c", () => {
-    assert.deepEqual(parseArgs(["node", "omnicode.js", "-c"]), { sessionId: null, continueSession: true });
+  it("parses -c", async () => {
+    assert.deepEqual(await parseArgs(["node", "omnicode.js", "-c"]), { sessionId: null, continueSession: true });
   });
 });
 
@@ -123,23 +123,23 @@ describe("resolveSessionMode", () => {
 });
 
 describe("isProcessRunning", () => {
-  it("returns true for a known-running process", () => {
+  it("returns true for a known-running process", async () => {
     const known = process.platform === "win32" ? "cmd" : "bash";
-    assert.equal(isProcessRunning(known), true);
+    assert.equal(await isProcessRunning(known), true);
   });
 
-  it("returns false for a nonexistent process", () => {
-    assert.equal(isProcessRunning("nonexistent-xyz-999"), false);
+  it("returns false for a nonexistent process", async () => {
+    assert.equal(await isProcessRunning("nonexistent-xyz-999"), false);
   });
 });
 
 describe("printStatus", () => {
-  it("prints process statuses", () => {
+  it("prints process statuses", async () => {
     const lines = [];
     const originalLog = console.log;
     console.log = (line) => lines.push(line);
     try {
-      printStatus({ opencode: true, omniroute: false });
+      await printStatus({ opencode: true, omniroute: false });
     } finally {
       console.log = originalLog;
     }
