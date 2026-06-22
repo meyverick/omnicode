@@ -3,6 +3,11 @@ import { readFileSync, realpathSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+process.on("unhandledRejection", (err) => {
+  console.error("[omnicode] UNHANDLED REJECTION:", err?.message || err);
+  process.exit(1);
+});
+
 import { commandExists, getOpencodeDbPath, isProcessRunning, detectQdrantMcp, generateQdrantConfig, ensureOpencodeConfig, indexReferences } from "../installer/lib.js";
 import { runRuntime } from "./omnicode-runtime.js";
 

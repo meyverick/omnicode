@@ -4,6 +4,10 @@ import { join } from "node:path";
 
 import { commandExists, getDataDir, isPidAlive, isProcessRunningAsync, detectQdrantMcp, generateQdrantConfig, ensureOpencodeConfig, ensureQdrantAgentInstructions, indexReferences, verifyFastEmbedModel, startMcpServer, stopMcpServer, getQdrantStoreEnv } from "../installer/lib.js";
 
+process.on("unhandledRejection", (err) => {
+  console.error("[omnicode] runtime: UNHANDLED REJECTION:", err?.message || err);
+});
+
 const MAX_OMNI_WAIT = 30;
 const OMNI_CHECK_DELAY = 1000;
 
