@@ -79,6 +79,8 @@ export function detectQdrantMcp() {
 
 export function generateQdrantConfig() {
   return {
+    type: "local",
+    enabled: true,
     command: "uvx",
     args: ["mcp-server-qdrant"],
     env: {

@@ -36,6 +36,8 @@ describe("lib helpers", () => {
 
   it("generateQdrantConfig returns correct structure", () => {
     const cfg = generateQdrantConfig();
+    assert.equal(cfg.type, "local");
+    assert.equal(cfg.enabled, true);
     assert.equal(cfg.command, "uvx");
     assert.ok(Array.isArray(cfg.args));
     assert.ok(cfg.args.includes("mcp-server-qdrant"));
