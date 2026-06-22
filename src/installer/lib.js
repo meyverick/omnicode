@@ -1,6 +1,6 @@
 import { execFileSync, execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import os from "node:os";
 
@@ -65,6 +65,41 @@ export function isPidAlive(pid) {
   } catch {
     return false;
   }
+}
+
+export function detectQdrantMcp() {
+  if (!commandExists("uvx")) return false;
+  try {
+    execFileSync("uvx", ["mcp-server-qdrant", "--help"], { stdio: "ignore" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function generateQdrantConfig() {
+  return {
+    command: "uvx",
+    args: ["mcp-server-qdrant"],
+    env: {
+      QDRANT_LOCAL_PATH: join(process.cwd(), ".qdrant"),
+      COLLECTION_NAME: "references",
+      EMBEDDING_MODEL: "sentence-transformers/all-MiniLM-L6-v2",
+    },
+  };
+}
+
+export function ensureOpencodeConfig(qdrantConfig) {
+  const configPath = join(process.cwd(), "opencode.jsonc");
+  let config = { $schema: "https://opencode.ai/config.json", mcp: {} };
+  if (existsSync(configPath)) {
+    try {
+      config = JSON.parse(readFileSync(configPath, "utf8"));
+    } catch {}
+    if (!config.mcp) config.mcp = {};
+  }
+  config.mcp.qdrant = qdrantConfig;
+  writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n", "utf8");
 }
 
 export function getDataDir() {

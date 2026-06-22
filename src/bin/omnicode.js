@@ -3,7 +3,7 @@ import { readFileSync, realpathSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { commandExists, getOpencodeDbPath, isProcessRunning } from "../installer/lib.js";
+import { commandExists, getOpencodeDbPath, isProcessRunning, detectQdrantMcp, generateQdrantConfig, ensureOpencodeConfig } from "../installer/lib.js";
 import { runRuntime } from "./omnicode-runtime.js";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
@@ -64,6 +64,9 @@ export function parseArgs(argv) {
       continueSession = true;
       continue;
     }
+    if (arg === "--index") {
+      return { sessionId: null, continueSession: false, index: true };
+    }
     if (arg === "-s") {
       sessionId = argv[++i];
       if (!sessionId) {
@@ -112,6 +115,17 @@ export async function resolveSessionMode(sessionId, latestSessionId = null) {
 
 async function main() {
   const args = parseArgs(process.argv);
+
+  if (args.index) {
+    if (!detectQdrantMcp()) {
+      console.error("[omnicode] ERROR: uvx mcp-server-qdrant not found. Install uvx first.");
+      process.exit(1);
+    }
+    const qdrantConfig = generateQdrantConfig();
+    ensureOpencodeConfig(qdrantConfig);
+    console.log("[omnicode] index: opencode.jsonc configured");
+    process.exit(0);
+  }
 
   const missing = ["opencode", "omniroute"].filter((cmd) => !commandExists(cmd));
   if (missing.length > 0) {

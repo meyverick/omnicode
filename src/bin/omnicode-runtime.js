@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 
-import { commandExists, getDataDir, isPidAlive, isProcessRunningAsync } from "../installer/lib.js";
+import { commandExists, getDataDir, isPidAlive, isProcessRunningAsync, detectQdrantMcp, generateQdrantConfig, ensureOpencodeConfig } from "../installer/lib.js";
 
 const MAX_OMNI_WAIT = 30;
 const OMNI_CHECK_DELAY = 1000;
@@ -163,6 +163,12 @@ export async function runRuntime(mode) {
     pid !== null ? waitForOmniroute(pid, logFile) : Promise.resolve(),
     initTools(dataDir),
   ]);
+
+  if (detectQdrantMcp()) {
+    const qdrantConfig = generateQdrantConfig();
+    ensureOpencodeConfig(qdrantConfig);
+    console.log("[omnicode] qdrant MCP configured");
+  }
 
   if (mode.flag === "-s" && mode.id) {
     console.log(`[omnicode] launching opencode (session: ${mode.id})`);

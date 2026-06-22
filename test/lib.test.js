@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
-import { commandExists, getDataDir, getOpencodeDbPath, isProcessRunningAsync } from "../src/installer/lib.js";
+import { commandExists, getDataDir, getOpencodeDbPath, isProcessRunningAsync, generateQdrantConfig, ensureOpencodeConfig, detectQdrantMcp } from "../src/installer/lib.js";
 
 describe("lib helpers", () => {
   it("commandExists returns true for a known command", () => {
@@ -31,5 +31,21 @@ describe("lib helpers", () => {
 
   it("isProcessRunningAsync returns false for a nonexistent process", async () => {
     assert.equal(await isProcessRunningAsync("nonexistent-xyz-999"), false);
+  });
+
+  it("generateQdrantConfig returns correct structure", () => {
+    const cfg = generateQdrantConfig();
+    assert.equal(cfg.command, "uvx");
+    assert.ok(Array.isArray(cfg.args));
+    assert.ok(cfg.args.includes("mcp-server-qdrant"));
+    assert.equal(cfg.env.COLLECTION_NAME, "references");
+    assert.ok(cfg.env.QDRANT_LOCAL_PATH.endsWith(".qdrant"));
+  });
+
+  it("ensureOpencodeConfig generates valid config structure", () => {
+    const cfg = generateQdrantConfig();
+    assert.ok(cfg.env.QDRANT_LOCAL_PATH);
+    assert.ok(cfg.env.COLLECTION_NAME);
+    assert.ok(cfg.env.EMBEDDING_MODEL);
   });
 });
