@@ -25,4 +25,4 @@
 ## 4. Final verification
 
 - [x] 4.1 Run `npm pack --dry-run` to confirm package contents
-- [ ] 4.2 Commit and push
+- [x] 4.2 Commit and push
