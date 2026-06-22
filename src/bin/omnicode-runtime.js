@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 
-import { commandExists, getDataDir, isPidAlive, isProcessRunningAsync, detectQdrantMcp, generateQdrantConfig, ensureOpencodeConfig } from "../installer/lib.js";
+import { commandExists, getDataDir, isPidAlive, isProcessRunningAsync, detectQdrantMcp, generateQdrantConfig, ensureOpencodeConfig, indexReferences } from "../installer/lib.js";
 
 const MAX_OMNI_WAIT = 30;
 const OMNI_CHECK_DELAY = 1000;
@@ -164,29 +164,32 @@ export async function runRuntime(mode) {
     initTools(dataDir),
   ]);
 
-  if (detectQdrantMcp()) {
+  const hasQdrant = detectQdrantMcp();
+  const refsDir = join(process.cwd(), "references");
+
+  if (hasQdrant) {
     const qdrantConfig = generateQdrantConfig();
     ensureOpencodeConfig(qdrantConfig);
     console.log("[omnicode] qdrant MCP configured");
   }
 
-  if (mode.flag === "-s" && mode.id) {
-    console.log(`[omnicode] launching opencode (session: ${mode.id})`);
-    await new Promise((resolve) => {
-      const child = spawn("opencode", ["-s", mode.id], {
-        stdio: "inherit",
-        cwd: process.cwd(),
-      });
-      child.on("close", () => resolve());
-    });
+  const launchOpencode = () => new Promise((resolve) => {
+    const args = mode.flag === "-s" && mode.id ? ["-s", mode.id] : [];
+    if (mode.flag === "-s" && mode.id) {
+      console.log(`[omnicode] launching opencode (session: ${mode.id})`);
+    } else {
+      console.log("[omnicode] launching opencode (new session)");
+    }
+    const child = spawn("opencode", args, { stdio: "inherit", cwd: process.cwd() });
+    child.on("close", () => resolve());
+  });
+
+  if (hasQdrant && existsSync(refsDir)) {
+    const qdrantConfig = generateQdrantConfig();
+    const launch = launchOpencode();
+    indexReferences(refsDir, qdrantConfig).catch(() => {});
+    await launch;
   } else {
-    console.log("[omnicode] launching opencode (new session)");
-    await new Promise((resolve) => {
-      const child = spawn("opencode", [], {
-        stdio: "inherit",
-        cwd: process.cwd(),
-      });
-      child.on("close", () => resolve());
-    });
+    await launchOpencode();
   }
 }

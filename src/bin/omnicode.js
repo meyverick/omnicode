@@ -3,7 +3,7 @@ import { readFileSync, realpathSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { commandExists, getOpencodeDbPath, isProcessRunning, detectQdrantMcp, generateQdrantConfig, ensureOpencodeConfig } from "../installer/lib.js";
+import { commandExists, getOpencodeDbPath, isProcessRunning, detectQdrantMcp, generateQdrantConfig, ensureOpencodeConfig, indexReferences } from "../installer/lib.js";
 import { runRuntime } from "./omnicode-runtime.js";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
@@ -123,7 +123,7 @@ async function main() {
     }
     const qdrantConfig = generateQdrantConfig();
     ensureOpencodeConfig(qdrantConfig);
-    console.log("[omnicode] index: opencode.jsonc configured");
+    await indexReferences(join(process.cwd(), "references"), qdrantConfig);
     process.exit(0);
   }
 

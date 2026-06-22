@@ -1,7 +1,8 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync } from "node:fs";
-import { commandExists, getDataDir, getOpencodeDbPath, isProcessRunningAsync, generateQdrantConfig, ensureOpencodeConfig, detectQdrantMcp } from "../src/installer/lib.js";
+import { existsSync, unlinkSync } from "node:fs";
+import { join } from "node:path";
+import { commandExists, getDataDir, getOpencodeDbPath, isProcessRunningAsync, generateQdrantConfig, ensureOpencodeConfig, detectQdrantMcp, walkReferences, chunkFile, loadIndexState, saveIndexState } from "../src/installer/lib.js";
 
 describe("lib helpers", () => {
   it("commandExists returns true for a known command", () => {
@@ -47,5 +48,39 @@ describe("lib helpers", () => {
     assert.ok(cfg.env.QDRANT_LOCAL_PATH);
     assert.ok(cfg.env.COLLECTION_NAME);
     assert.ok(cfg.env.EMBEDDING_MODEL);
+  });
+
+  it("walkReferences returns an array", () => {
+    const refsDir = getDataDir().replace("omnicode", "..").replace("/.local/share/..", "..");
+    const files = walkReferences(process.cwd());
+    assert.ok(Array.isArray(files));
+  });
+
+  it("chunkFile splits markdown by headings", () => {
+    const content = "# Title\n\n## Section 1\n\nSome text\n\n## Section 2\n\nMore text";
+    const chunks = chunkFile(content, "test.md");
+    assert.ok(chunks.length >= 2);
+    assert.ok(chunks.some((c) => c.includes("Section 1")));
+    assert.ok(chunks.some((c) => c.includes("Section 2")));
+  });
+
+  it("chunkFile splits non-markdown by line count", () => {
+    const lines = Array.from({ length: 120 }, (_, i) => `line ${i + 1}`);
+    const content = lines.join("\n");
+    const chunks = chunkFile(content, "test.txt");
+    assert.ok(chunks.length >= 2);
+    assert.ok(chunks[0].includes("line 1"));
+  });
+
+  it("loadIndexState returns empty object for missing file", () => {
+    const state = loadIndexState("/nonexistent/path.json");
+    assert.deepEqual(state, {});
+  });
+
+  it("saveIndexState and loadIndexState round-trip", () => {
+    const statePath = join(process.cwd(), ".test-index-state.json");
+    saveIndexState(statePath, { "/test/file.md": 123456 });
+    const loaded = loadIndexState(statePath);
+    assert.equal(loaded["/test/file.md"], 123456);
   });
 });
