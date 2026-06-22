@@ -1,8 +1,9 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, unlinkSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import os from "node:os";
 import { join } from "node:path";
-import { commandExists, getDataDir, getOpencodeDbPath, isProcessRunningAsync, generateQdrantConfig, ensureOpencodeConfig, detectQdrantMcp, walkReferences, chunkFile, loadIndexState, saveIndexState } from "../src/installer/lib.js";
+import { commandExists, getDataDir, getOpencodeDbPath, isProcessRunningAsync, generateQdrantConfig, ensureOpencodeConfig, detectQdrantMcp, walkReferences, chunkFile, loadIndexState, saveIndexState, getFastEmbedCacheDir, getFastEmbedModelPath, verifyFastEmbedModel, getQdrantStoreEnv } from "../src/installer/lib.js";
 
 describe("lib helpers", () => {
   it("commandExists returns true for a known command", () => {
@@ -43,6 +44,7 @@ describe("lib helpers", () => {
     assert.ok(cfg.command.includes("mcp-server-qdrant"));
     assert.equal(cfg.env.COLLECTION_NAME, "references");
     assert.ok(cfg.env.QDRANT_LOCAL_PATH.endsWith(".qdrant"));
+    assert.ok(cfg.env.FASTEMBED_CACHE_PATH.endsWith("fastembed"));
   });
 
   it("ensureOpencodeConfig generates valid config structure", () => {
@@ -50,6 +52,120 @@ describe("lib helpers", () => {
     assert.ok(cfg.env.QDRANT_LOCAL_PATH);
     assert.ok(cfg.env.COLLECTION_NAME);
     assert.ok(cfg.env.EMBEDDING_MODEL);
+    assert.ok(cfg.env.FASTEMBED_CACHE_PATH);
+  });
+
+  it("getQdrantStoreEnv includes FASTEMBED_CACHE_PATH for MCP", () => {
+    const cfg = generateQdrantConfig();
+    const env = getQdrantStoreEnv(cfg);
+    assert.equal(env.FASTEMBED_CACHE_PATH, cfg.env.FASTEMBED_CACHE_PATH);
+    assert.ok(env.FASTEMBED_CACHE_PATH.endsWith("fastembed"));
+  });
+
+  it("getFastEmbedCacheDir returns a persistent cache path", () => {
+    const dir = getFastEmbedCacheDir();
+    assert.ok(dir.endsWith("fastembed"));
+    assert.equal(dir.includes("/tmp/fastembed_cache"), false);
+  });
+
+  it("getFastEmbedModelPath finds an existing model.onnx", () => {
+    const cacheDir = mkdtempSync(join(os.tmpdir(), "omnicode-fastembed-"));
+    try {
+      const modelDir = join(cacheDir, "models--qdrant--all-MiniLM-L6-v2-onnx", "snapshots", "abc123");
+      mkdirSync(modelDir, { recursive: true });
+      const modelPath = join(modelDir, "model.onnx");
+      writeFileSync(modelPath, "model");
+      assert.equal(getFastEmbedModelPath(cacheDir), modelPath);
+    } finally {
+      rmSync(cacheDir, { recursive: true, force: true });
+    }
+  });
+
+  it("verifyFastEmbedModel returns true for a valid cached model", async () => {
+    const cacheDir = mkdtempSync(join(os.tmpdir(), "omnicode-fastembed-"));
+    try {
+      const modelDir = join(cacheDir, "models--qdrant--all-MiniLM-L6-v2-onnx", "snapshots", "abc123");
+      mkdirSync(modelDir, { recursive: true });
+      writeFileSync(join(modelDir, "model.onnx"), "valid-model");
+      let calls = 0;
+      const ok = await verifyFastEmbedModel({
+        cacheDir,
+        minModelSize: 1,
+        warmup: async () => { calls++; },
+      });
+      assert.equal(ok, true);
+      assert.equal(calls, 1);
+    } finally {
+      rmSync(cacheDir, { recursive: true, force: true });
+    }
+  });
+
+  it("verifyFastEmbedModel downloads when model is missing", async () => {
+    const cacheDir = mkdtempSync(join(os.tmpdir(), "omnicode-fastembed-"));
+    try {
+      let calls = 0;
+      const ok = await verifyFastEmbedModel({
+        cacheDir,
+        minModelSize: 1,
+        warmup: async () => {
+          calls++;
+          const modelDir = join(cacheDir, "models--qdrant--all-MiniLM-L6-v2-onnx", "snapshots", "abc123");
+          mkdirSync(modelDir, { recursive: true });
+          writeFileSync(join(modelDir, "model.onnx"), "valid-model");
+        },
+      });
+      assert.equal(ok, true);
+      assert.equal(calls, 2);
+    } finally {
+      rmSync(cacheDir, { recursive: true, force: true });
+    }
+  });
+
+  it("verifyFastEmbedModel repairs a truncated model", async () => {
+    const cacheDir = mkdtempSync(join(os.tmpdir(), "omnicode-fastembed-"));
+    try {
+      const modelDir = join(cacheDir, "models--qdrant--all-MiniLM-L6-v2-onnx", "snapshots", "abc123");
+      mkdirSync(modelDir, { recursive: true });
+      writeFileSync(join(modelDir, "model.onnx"), "x");
+      let calls = 0;
+      const ok = await verifyFastEmbedModel({
+        cacheDir,
+        minModelSize: 10,
+        warmup: async () => {
+          calls++;
+          mkdirSync(modelDir, { recursive: true });
+          writeFileSync(join(modelDir, "model.onnx"), "valid-model");
+        },
+      });
+      assert.equal(ok, true);
+      assert.equal(calls, 2);
+    } finally {
+      rmSync(cacheDir, { recursive: true, force: true });
+    }
+  });
+
+  it("verifyFastEmbedModel repairs a model that fails load validation", async () => {
+    const cacheDir = mkdtempSync(join(os.tmpdir(), "omnicode-fastembed-"));
+    try {
+      const modelDir = join(cacheDir, "models--qdrant--all-MiniLM-L6-v2-onnx", "snapshots", "abc123");
+      mkdirSync(modelDir, { recursive: true });
+      writeFileSync(join(modelDir, "model.onnx"), "valid-size");
+      let calls = 0;
+      const ok = await verifyFastEmbedModel({
+        cacheDir,
+        minModelSize: 1,
+        warmup: async () => {
+          calls++;
+          if (calls === 1) throw new Error("corrupt onnx");
+          mkdirSync(modelDir, { recursive: true });
+          writeFileSync(join(modelDir, "model.onnx"), "valid-model");
+        },
+      });
+      assert.equal(ok, true);
+      assert.equal(calls, 3);
+    } finally {
+      rmSync(cacheDir, { recursive: true, force: true });
+    }
   });
 
   it("walkReferences returns an array", () => {

@@ -1,11 +1,15 @@
 import { spawn, execFileSync, execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync, rmSync } from "node:fs";
 import { join, basename, extname } from "node:path";
 import os from "node:os";
 
 const execFileAsync = promisify(execFile);
 const isWindows = process.platform === "win32";
+const FASTEMBED_MODEL_CACHE_DIR = "models--qdrant--all-MiniLM-L6-v2-onnx";
+const FASTEMBED_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2";
+const FASTEMBED_MIN_MODEL_SIZE = 80 * 1024 * 1024;
+const FASTEMBED_WARMUP_SCRIPT = `from fastembed import TextEmbedding; list(TextEmbedding('${FASTEMBED_MODEL_NAME}').passage_embed(['warmup']))`;
 
 export function commandExists(command) {
   const tool = isWindows ? "where" : "which";
@@ -86,6 +90,7 @@ export function generateQdrantConfig() {
       QDRANT_LOCAL_PATH: join(process.cwd(), ".qdrant"),
       COLLECTION_NAME: "references",
       EMBEDDING_MODEL: "sentence-transformers/all-MiniLM-L6-v2",
+      FASTEMBED_CACHE_PATH: getFastEmbedCacheDir(),
     },
   };
 }
@@ -111,6 +116,81 @@ export function getOpencodeDbPath() {
   const dbPath = join(os.homedir(), ".local", "share", "opencode", "opencode.db");
   if (!existsSync(dbPath)) return null;
   return dbPath;
+}
+
+export function getFastEmbedCacheDir() {
+  if (isWindows) return join(process.env.LOCALAPPDATA || os.tmpdir(), "fastembed");
+  return join(os.homedir(), ".cache", "fastembed");
+}
+
+export function getFastEmbedModelPath(cacheDir = getFastEmbedCacheDir()) {
+  const snapshotsDir = join(cacheDir, FASTEMBED_MODEL_CACHE_DIR, "snapshots");
+  try {
+    const snapshots = readdirSync(snapshotsDir, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => join(snapshotsDir, entry.name, "model.onnx"));
+    return snapshots.find((modelPath) => existsSync(modelPath)) || null;
+  } catch {
+    return null;
+  }
+}
+
+async function runFastEmbedWarmup(cacheDir, timeout) {
+  await execFileAsync("uvx", ["--from", "mcp-server-qdrant", "python3", "-c", FASTEMBED_WARMUP_SCRIPT], {
+    env: { ...process.env, FASTEMBED_CACHE_PATH: cacheDir },
+    timeout,
+  });
+}
+
+export async function verifyFastEmbedModel(options = {}) {
+  const cacheDir = options.cacheDir || getFastEmbedCacheDir();
+  const minModelSize = options.minModelSize || FASTEMBED_MIN_MODEL_SIZE;
+  const warmup = options.warmup || runFastEmbedWarmup;
+  const loadTimeout = options.loadTimeout || 30000;
+  const downloadTimeout = options.downloadTimeout || 120000;
+  const modelCacheDir = join(cacheDir, FASTEMBED_MODEL_CACHE_DIR);
+
+  const validate = async () => {
+    const modelPath = getFastEmbedModelPath(cacheDir);
+    if (!modelPath) return false;
+    try {
+      if (statSync(modelPath).size < minModelSize) return false;
+      await warmup(cacheDir, loadTimeout);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  console.log("[omnicode] verifying embedding model...");
+  if (await validate()) {
+    console.log("[omnicode] embedding model OK");
+    return true;
+  }
+
+  console.log("[omnicode] embedding model corrupted, re-downloading...");
+  try {
+    rmSync(modelCacheDir, { recursive: true, force: true });
+    mkdirSync(cacheDir, { recursive: true });
+    await warmup(cacheDir, downloadTimeout);
+    if (await validate()) {
+      console.log("[omnicode] embedding model downloaded");
+      return true;
+    }
+  } catch {}
+
+  console.error(`[omnicode] index: failed to prepare FastEmbed model cache at ${cacheDir}`);
+  console.error("[omnicode] index: run `rm -rf <cache>` and retry, or check network access to HuggingFace.");
+  return false;
+}
+
+export function getQdrantStoreEnv(qdrantConfig) {
+  return {
+    QDRANT_LOCAL_PATH: qdrantConfig.env.QDRANT_LOCAL_PATH,
+    COLLECTION_NAME: qdrantConfig.env.COLLECTION_NAME,
+    EMBEDDING_MODEL: qdrantConfig.env.EMBEDDING_MODEL,
+    FASTEMBED_CACHE_PATH: qdrantConfig.env.FASTEMBED_CACHE_PATH || getFastEmbedCacheDir(),
+  };
 }
 
 const TEXT_EXTENSIONS = new Set([".md", ".txt", ".json", ".yaml", ".yml", ".ts", ".js", ".mjs", ".cjs", ".sh", ".bash", ".zsh", ".toml", ".cfg", ".conf", ".ini", ".env", ".gitignore", ".dockerfile"]);
@@ -175,56 +255,107 @@ export function saveIndexState(statePath, state) {
   writeFileSync(statePath, JSON.stringify(state, null, 2) + "\n", "utf8");
 }
 
-export async function callQdrantStore(chunks, env) {
+export async function callQdrantStore(chunks, env, concurrency = 10) {
   const child = spawn("uvx", ["mcp-server-qdrant"], {
     env: { ...process.env, ...env },
     stdio: ["pipe", "pipe", "pipe"],
   });
 
   const results = [];
+  const pending = new Map();
   let buffer = "";
+  let stderr = "";
 
-  child.stdout.on("data", (data) => { buffer += data.toString(); });
+  const resolvePending = (id, message) => {
+    if (!pending.has(id)) return;
+    const request = pending.get(id);
+    pending.delete(id);
+    clearTimeout(request.timeout);
+    request.resolve(message);
+  };
 
-  await new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => { child.kill(); reject(new Error("MCP server did not initialize in time")); }, 10000);
+  const parseMessages = (data) => {
+    buffer += data.toString();
+    const lines = buffer.split("\n");
+    buffer = lines.pop() || "";
 
-    child.stdout.on("data", () => {
-      if (buffer.includes("server-ready") || buffer.includes('"result"')) {
-        clearTimeout(timeout);
-        resolve();
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+
+      let message;
+      try {
+        message = JSON.parse(trimmed);
+      } catch {
+        continue;
       }
-    });
-    child.on("error", reject);
 
-    child.stdin.write(JSON.stringify({
-      jsonrpc: "2.0", id: 1, method: "initialize",
-      params: { protocolVersion: "2025-03-26", capabilities: {}, clientInfo: { name: "omnicode-indexer", version: "0.1" } },
-    }) + "\n");
+      if (message.id !== undefined) resolvePending(message.id, message);
+    }
+  };
+
+  const waitForResponse = (id, timeoutMs, timeoutMessage) => new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      pending.delete(id);
+      reject(new Error(timeoutMessage));
+    }, timeoutMs);
+    pending.set(id, { resolve, timeout });
   });
+
+  child.stdout.on("data", parseMessages);
+  child.stderr.on("data", (data) => { stderr += data.toString(); });
+  child.on("error", (err) => {
+    for (const id of pending.keys()) {
+      resolvePending(id, { error: { message: err.message } });
+    }
+  });
+  child.on("close", (code) => {
+    const message = stderr.trim().split("\n").pop() || `MCP server exited with code ${code}`;
+    for (const id of pending.keys()) {
+      resolvePending(id, { error: { message } });
+    }
+  });
+
+  const initResponse = waitForResponse(1, 10000, "MCP server did not initialize in time");
+  child.stdin.write(JSON.stringify({
+    jsonrpc: "2.0", id: 1, method: "initialize",
+    params: { protocolVersion: "2025-03-26", capabilities: {}, clientInfo: { name: "omnicode-indexer", version: "0.1" } },
+  }) + "\n");
+  const initialized = await initResponse;
+  if (initialized.error) throw new Error(initialized.error.message || "MCP server failed to initialize");
 
   child.stdin.write(JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }) + "\n");
 
-  for (let i = 0; i < chunks.length; i++) {
-    const chunk = chunks[i];
-    if (chunk.length < 10) continue;
-    const id = i + 2;
-    await new Promise((resolve) => {
-      const onData = (data) => {
-        buffer += data.toString();
-        if (buffer.includes(`"id":${id}`) || buffer.includes(`"id": ${id}`)) {
-          child.stdout.removeListener("data", onData);
-          results.push({ chunk: chunk.substring(0, 80), stored: true });
-          resolve();
-        }
-      };
-      child.stdout.on("data", onData);
-      child.stdin.write(JSON.stringify({
-        jsonrpc: "2.0", id, method: "tools/call",
-        params: { name: "qdrant-store", arguments: { information: chunk } },
-      }) + "\n");
-    });
-  }
+  const storeChunks = chunks.filter((chunk) => chunk.length >= 10);
+  const workerCount = Math.min(Math.max(1, concurrency), storeChunks.length);
+  let nextChunk = 0;
+  let nextId = 2;
+
+  const storeChunk = async (chunk) => {
+    const id = nextId++;
+    const response = waitForResponse(id, 30000, `chunk ${id} timed out`)
+      .catch((err) => ({ error: { message: err.message } }));
+    child.stdin.write(JSON.stringify({
+      jsonrpc: "2.0", id, method: "tools/call",
+      params: { name: "qdrant-store", arguments: { information: chunk } },
+    }) + "\n");
+
+    const message = await response;
+    if (message.error) {
+      console.warn(`[omnicode] index: warning: ${message.error.message || "chunk failed"}`);
+      return;
+    }
+    results.push({ chunk: chunk.substring(0, 80), stored: true });
+  };
+
+  const worker = async () => {
+    while (nextChunk < storeChunks.length) {
+      const chunk = storeChunks[nextChunk++];
+      await storeChunk(chunk);
+    }
+  };
+
+  await Promise.all(Array.from({ length: workerCount }, () => worker()));
 
   child.stdin.write(JSON.stringify({ jsonrpc: "2.0", method: "exit" }) + "\n");
   child.stdin.end();
@@ -272,12 +403,14 @@ export async function indexReferences(refsDir, qdrantConfig) {
   console.log(`[omnicode] index: storing ${allChunks.length} chunks`);
 
   try {
-    const env = {
-      QDRANT_LOCAL_PATH: qdrantConfig.env.QDRANT_LOCAL_PATH,
-      COLLECTION_NAME: qdrantConfig.env.COLLECTION_NAME,
-      EMBEDDING_MODEL: qdrantConfig.env.EMBEDDING_MODEL,
-    };
-    await callQdrantStore(allChunks.map((c) => c.text), env);
+    if (!(await verifyFastEmbedModel({ cacheDir: qdrantConfig.env.FASTEMBED_CACHE_PATH || getFastEmbedCacheDir() }))) {
+      console.error("[omnicode] index: skipped because embedding model is unavailable");
+      return;
+    }
+
+    const env = getQdrantStoreEnv(qdrantConfig);
+    const concurrency = Number.parseInt(process.env.OMNICODE_INDEX_CONCURRENCY || "10", 10);
+    await callQdrantStore(allChunks.map((c) => c.text), env, Number.isFinite(concurrency) && concurrency > 0 ? concurrency : 10);
     console.log("[omnicode] index: complete");
   } catch (err) {
     console.error(`[omnicode] index: failed — ${err.message}`);
