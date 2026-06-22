@@ -21,15 +21,17 @@ async function initTool(name, args, logPath) {
   try {
     log = openSync(logPath, "w");
     const child = spawn(name, args, { stdio: ["ignore", log, log] });
+    let timer;
     const result = await Promise.race([
       new Promise((resolve) => {
         child.on("close", resolve);
         child.on("error", () => resolve(null));
       }),
       new Promise((resolve) => {
-        setTimeout(() => { child.kill(); resolve(null); }, 30000);
+        timer = setTimeout(() => { child.kill(); resolve(null); }, 30000);
       }),
     ]);
+    clearTimeout(timer);
     if (result === null) {
       console.log(`[omnicode] WARNING: ${name} init timed out; continuing. Log: ${logPath}`);
     } else if (result === 0) {
