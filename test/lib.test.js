@@ -323,4 +323,41 @@ describe("lib helpers", () => {
     const loaded = loadIndexState(statePath);
     assert.equal(loaded["/test/file.md"], 123456);
   });
+
+  it("survives rapid MCP server start/stop cycles", async () => {
+    for (let i = 0; i < 5; i++) {
+      const child = createFakeMcpProcess((message, fakeChild) => {
+        if (message.method === "initialize") {
+          queueMicrotask(() => fakeChild.stdout.emit("data", JSON.stringify({ jsonrpc: "2.0", id: message.id, result: {} }) + "\n"));
+        }
+      });
+      const server = await startMcpServer({ FASTEMBED_CACHE_PATH: "/tmp/test-fastembed" }, {
+        spawn: () => child,
+        initTimeout: 100,
+      });
+      assert.equal(server.child.killed, undefined);
+      stopMcpServer(server);
+      assert.equal(server.child.stdinEnded, true);
+      assert.equal(server.child.killed, true);
+    }
+  });
+
+  it("handles MCP server crash mid-indexing gracefully", async () => {
+    let chunkCalls = 0;
+    const server = {
+      request: async (method) => {
+        chunkCalls++;
+        if (chunkCalls >= 2) return { error: { message: "connection closed" } };
+        return { result: {} };
+      },
+    };
+    const result = await callQdrantStore(["chunk one", "chunk two", "chunk three"], {}, 2, server);
+    assert.equal(result.length, 1);
+  });
+
+  it("stopMcpServer does not throw on already-dead child", () => {
+    const child = createFakeMcpProcess();
+    child.killed = true;
+    assert.doesNotThrow(() => stopMcpServer({ child, notify: () => {} }));
+  });
 });

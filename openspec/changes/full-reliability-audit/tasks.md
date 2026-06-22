@@ -26,10 +26,10 @@
 
 ## 5. Stress tests
 
-- [ ] 5.1 Add test: rapid open/close cycles to verify no process leak
-- [ ] 5.2 Add test: simulate MCP server crash mid-indexing and verify graceful recovery
-- [ ] 5.3 Add test: verify zero orphaned processes after SIGINT/SIGTERM
-- [ ] 5.4 Run full test suite and fix any failures
+- [x] 5.1 Add test: rapid open/close cycles to verify no process leak
+- [x] 5.2 Add test: simulate MCP server crash mid-indexing and verify graceful recovery
+- [x] 5.3 Add test: verify zero orphaned processes after SIGINT/SIGTERM
+- [x] 5.4 Run full test suite and fix any failures
 
 ## 6. Final verification
 
