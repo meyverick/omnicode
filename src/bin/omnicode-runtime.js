@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 
-import { commandExists, getDataDir, isPidAlive, isProcessRunningAsync, detectQdrantMcp, generateQdrantConfig, ensureOpencodeConfig, indexReferences, verifyFastEmbedModel, startMcpServer, stopMcpServer, getQdrantStoreEnv } from "../installer/lib.js";
+import { commandExists, getDataDir, isPidAlive, isProcessRunningAsync, detectQdrantMcp, generateQdrantConfig, ensureOpencodeConfig, ensureQdrantAgentInstructions, indexReferences, verifyFastEmbedModel, startMcpServer, stopMcpServer, getQdrantStoreEnv } from "../installer/lib.js";
 
 const MAX_OMNI_WAIT = 30;
 const OMNI_CHECK_DELAY = 1000;
@@ -172,6 +172,7 @@ export async function runRuntime(mode) {
   if (hasQdrant) {
     qdrantConfig = generateQdrantConfig();
     ensureOpencodeConfig(qdrantConfig);
+    ensureQdrantAgentInstructions();
     console.log("[omnicode] qdrant MCP configured");
   }
 

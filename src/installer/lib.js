@@ -1,15 +1,20 @@
 import { spawn, execFileSync, execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync, rmSync } from "node:fs";
-import { join, basename, extname } from "node:path";
+import { join, basename, dirname, extname } from "node:path";
+import { fileURLToPath } from "node:url";
 import os from "node:os";
 
 const execFileAsync = promisify(execFile);
+const __dirname = dirname(fileURLToPath(import.meta.url));
 const isWindows = process.platform === "win32";
 const FASTEMBED_MODEL_CACHE_DIR = "models--qdrant--all-MiniLM-L6-v2-onnx";
 const FASTEMBED_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2";
 const FASTEMBED_MIN_MODEL_SIZE = 80 * 1024 * 1024;
 const FASTEMBED_WARMUP_SCRIPT = `from fastembed import TextEmbedding; list(TextEmbedding('${FASTEMBED_MODEL_NAME}').passage_embed(['warmup']))`;
+const QDRANT_INSTRUCTIONS_BEGIN = "<!-- qdrant:instructions:begin";
+const QDRANT_INSTRUCTIONS_END = "<!-- qdrant:instructions:end -->";
+const QDRANT_AGENTS_TEMPLATE = readFileSync(join(__dirname, "AGENTS.template.md"), "utf8").trim() + "\n";
 
 export function commandExists(command) {
   const tool = isWindows ? "where" : "which";
@@ -107,6 +112,27 @@ export function ensureOpencodeConfig(qdrantConfig) {
   }
   config.mcp.qdrant = { ...qdrantConfig, disabled: true };
   writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n", "utf8");
+}
+
+export function ensureQdrantAgentInstructions(agentsPath = join(process.cwd(), "AGENTS.md"), template = QDRANT_AGENTS_TEMPLATE) {
+  if (!existsSync(agentsPath)) {
+    writeFileSync(agentsPath, template, "utf8");
+    return;
+  }
+
+  const current = readFileSync(agentsPath, "utf8");
+  const beginIndex = current.indexOf(QDRANT_INSTRUCTIONS_BEGIN);
+  const endIndex = current.indexOf(QDRANT_INSTRUCTIONS_END);
+
+  if (beginIndex === -1 || endIndex === -1 || endIndex < beginIndex) {
+    const separator = current.endsWith("\n") ? "\n" : "\n\n";
+    writeFileSync(agentsPath, current + separator + template, "utf8");
+    return;
+  }
+
+  const endOfBlock = endIndex + QDRANT_INSTRUCTIONS_END.length;
+  const next = current.slice(0, beginIndex) + template.trimEnd() + current.slice(endOfBlock);
+  writeFileSync(agentsPath, next.endsWith("\n") ? next : `${next}\n`, "utf8");
 }
 
 export function getDataDir() {

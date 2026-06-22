@@ -1,10 +1,10 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import { join } from "node:path";
-import { commandExists, getDataDir, getOpencodeDbPath, isProcessRunningAsync, generateQdrantConfig, ensureOpencodeConfig, detectQdrantMcp, walkReferences, chunkFile, loadIndexState, saveIndexState, getFastEmbedCacheDir, getFastEmbedModelPath, verifyFastEmbedModel, getQdrantStoreEnv, startMcpServer, stopMcpServer, callQdrantStore } from "../src/installer/lib.js";
+import { commandExists, getDataDir, getOpencodeDbPath, isProcessRunningAsync, generateQdrantConfig, ensureOpencodeConfig, ensureQdrantAgentInstructions, detectQdrantMcp, walkReferences, chunkFile, loadIndexState, saveIndexState, getFastEmbedCacheDir, getFastEmbedModelPath, verifyFastEmbedModel, getQdrantStoreEnv, startMcpServer, stopMcpServer, callQdrantStore } from "../src/installer/lib.js";
 
 function createFakeMcpProcess(handler = () => {}) {
   const child = new EventEmitter();
@@ -74,6 +74,63 @@ describe("lib helpers", () => {
     const env = getQdrantStoreEnv(cfg);
     assert.equal(env.FASTEMBED_CACHE_PATH, cfg.env.FASTEMBED_CACHE_PATH);
     assert.ok(env.FASTEMBED_CACHE_PATH.endsWith("fastembed"));
+  });
+
+  it("ensureQdrantAgentInstructions creates AGENTS.md from template", () => {
+    const dir = mkdtempSync(join(os.tmpdir(), "omnicode-agents-"));
+    try {
+      const agentsPath = join(dir, "AGENTS.md");
+      const template = "<!-- qdrant:instructions:begin -->\nQdrant instructions\n<!-- qdrant:instructions:end -->\n";
+      ensureQdrantAgentInstructions(agentsPath, template);
+      assert.equal(readFileSync(agentsPath, "utf8"), template);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("ensureQdrantAgentInstructions appends the qdrant block when missing", () => {
+    const dir = mkdtempSync(join(os.tmpdir(), "omnicode-agents-"));
+    try {
+      const agentsPath = join(dir, "AGENTS.md");
+      const template = "<!-- qdrant:instructions:begin -->\nQdrant instructions\n<!-- qdrant:instructions:end -->\n";
+      writeFileSync(agentsPath, "# Existing Instructions\n", "utf8");
+      ensureQdrantAgentInstructions(agentsPath, template);
+      const content = readFileSync(agentsPath, "utf8");
+      assert.ok(content.startsWith("# Existing Instructions\n"));
+      assert.ok(content.includes(template.trim()));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("ensureQdrantAgentInstructions replaces an existing qdrant block", () => {
+    const dir = mkdtempSync(join(os.tmpdir(), "omnicode-agents-"));
+    try {
+      const agentsPath = join(dir, "AGENTS.md");
+      const template = "<!-- qdrant:instructions:begin -->\nNew qdrant instructions\n<!-- qdrant:instructions:end -->\n";
+      writeFileSync(agentsPath, "Before\n<!-- qdrant:instructions:begin -->\nOld qdrant instructions\n<!-- qdrant:instructions:end -->\nAfter\n", "utf8");
+      ensureQdrantAgentInstructions(agentsPath, template);
+      const content = readFileSync(agentsPath, "utf8");
+      assert.ok(content.includes("New qdrant instructions"));
+      assert.equal(content.includes("Old qdrant instructions"), false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("ensureQdrantAgentInstructions preserves content outside the managed block", () => {
+    const dir = mkdtempSync(join(os.tmpdir(), "omnicode-agents-"));
+    try {
+      const agentsPath = join(dir, "AGENTS.md");
+      const template = "<!-- qdrant:instructions:begin -->\nNew qdrant instructions\n<!-- qdrant:instructions:end -->\n";
+      writeFileSync(agentsPath, "Before\n<!-- qdrant:instructions:begin -->\nOld\n<!-- qdrant:instructions:end -->\nAfter\n", "utf8");
+      ensureQdrantAgentInstructions(agentsPath, template);
+      const content = readFileSync(agentsPath, "utf8");
+      assert.ok(content.startsWith("Before\n"));
+      assert.ok(content.endsWith("\nAfter\n"));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it("startMcpServer initializes an MCP server", async () => {
