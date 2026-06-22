@@ -85,6 +85,7 @@ export function generateQdrantConfig() {
   return {
     type: "local",
     enabled: true,
+    disabled: true,
     command: ["uvx", "mcp-server-qdrant"],
     env: {
       QDRANT_LOCAL_PATH: join(process.cwd(), ".qdrant"),
@@ -104,7 +105,7 @@ export function ensureOpencodeConfig(qdrantConfig) {
     } catch {}
     if (!config.mcp) config.mcp = {};
   }
-  config.mcp.qdrant = qdrantConfig;
+  config.mcp.qdrant = { ...qdrantConfig, disabled: true };
   writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n", "utf8");
 }
 
@@ -193,6 +194,106 @@ export function getQdrantStoreEnv(qdrantConfig) {
   };
 }
 
+export async function startMcpServer(env, options = {}) {
+  const spawnFn = options.spawn || spawn;
+  const initTimeout = options.initTimeout || 10000;
+  const child = spawnFn("uvx", ["mcp-server-qdrant"], {
+    env: { ...process.env, ...env, FASTEMBED_CACHE_PATH: env.FASTEMBED_CACHE_PATH || getFastEmbedCacheDir() },
+    stdio: ["pipe", "pipe", "pipe"],
+  });
+
+  const pending = new Map();
+  let buffer = "";
+  let stderr = "";
+  let nextId = 1;
+
+  const resolvePending = (id, message) => {
+    if (!pending.has(id)) return;
+    const request = pending.get(id);
+    pending.delete(id);
+    clearTimeout(request.timeout);
+    request.resolve(message);
+  };
+
+  const rejectPending = (message) => {
+    for (const id of pending.keys()) {
+      resolvePending(id, { error: { message } });
+    }
+  };
+
+  const parseMessages = (data) => {
+    buffer += data.toString();
+    const lines = buffer.split("\n");
+    buffer = lines.pop() || "";
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+
+      let message;
+      try {
+        message = JSON.parse(trimmed);
+      } catch {
+        continue;
+      }
+
+      if (message.id !== undefined) resolvePending(message.id, message);
+    }
+  };
+
+  const request = (method, params, timeoutMs, timeoutMessage) => {
+    const id = nextId++;
+    const response = new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        pending.delete(id);
+        reject(new Error(timeoutMessage));
+      }, timeoutMs);
+      pending.set(id, { resolve, timeout });
+    });
+
+    child.stdin.write(JSON.stringify({ jsonrpc: "2.0", id, method, params }) + "\n");
+    return response;
+  };
+
+  const notify = (method, params) => {
+    child.stdin.write(JSON.stringify({ jsonrpc: "2.0", method, ...(params ? { params } : {}) }) + "\n");
+  };
+
+  child.stdout.on("data", parseMessages);
+  child.stderr.on("data", (data) => { stderr += data.toString(); });
+  child.on("error", (err) => { rejectPending(err.message); });
+  child.on("close", (code) => {
+    rejectPending(stderr.trim().split("\n").pop() || `MCP server exited with code ${code}`);
+  });
+
+  let initialized;
+  try {
+    initialized = await request("initialize", {
+      protocolVersion: "2025-03-26",
+      capabilities: {},
+      clientInfo: { name: "omnicode-indexer", version: "0.1" },
+    }, initTimeout, "MCP server did not initialize in time");
+  } catch (err) {
+    try { child.kill(); } catch {}
+    throw err;
+  }
+  if (initialized.error) {
+    try { child.kill(); } catch {}
+    throw new Error(initialized.error.message || "MCP server failed to initialize");
+  }
+
+  notify("notifications/initialized");
+
+  return { child, request, notify, pending };
+}
+
+export function stopMcpServer(mcpServer) {
+  if (!mcpServer) return;
+  try { mcpServer.notify("exit"); } catch {}
+  try { mcpServer.child.stdin.end(); } catch {}
+  try { mcpServer.child.kill(); } catch {}
+}
+
 const TEXT_EXTENSIONS = new Set([".md", ".txt", ".json", ".yaml", ".yml", ".ts", ".js", ".mjs", ".cjs", ".sh", ".bash", ".zsh", ".toml", ".cfg", ".conf", ".ini", ".env", ".gitignore", ".dockerfile"]);
 
 export function walkReferences(dir) {
@@ -255,76 +356,10 @@ export function saveIndexState(statePath, state) {
   writeFileSync(statePath, JSON.stringify(state, null, 2) + "\n", "utf8");
 }
 
-export async function callQdrantStore(chunks, env, concurrency = 10) {
-  const child = spawn("uvx", ["mcp-server-qdrant"], {
-    env: { ...process.env, ...env },
-    stdio: ["pipe", "pipe", "pipe"],
-  });
-
+export async function callQdrantStore(chunks, env, concurrency = 10, mcpServer = null) {
+  const ownsServer = !mcpServer;
+  const server = mcpServer || await startMcpServer(env);
   const results = [];
-  const pending = new Map();
-  let buffer = "";
-  let stderr = "";
-
-  const resolvePending = (id, message) => {
-    if (!pending.has(id)) return;
-    const request = pending.get(id);
-    pending.delete(id);
-    clearTimeout(request.timeout);
-    request.resolve(message);
-  };
-
-  const parseMessages = (data) => {
-    buffer += data.toString();
-    const lines = buffer.split("\n");
-    buffer = lines.pop() || "";
-
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed) continue;
-
-      let message;
-      try {
-        message = JSON.parse(trimmed);
-      } catch {
-        continue;
-      }
-
-      if (message.id !== undefined) resolvePending(message.id, message);
-    }
-  };
-
-  const waitForResponse = (id, timeoutMs, timeoutMessage) => new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => {
-      pending.delete(id);
-      reject(new Error(timeoutMessage));
-    }, timeoutMs);
-    pending.set(id, { resolve, timeout });
-  });
-
-  child.stdout.on("data", parseMessages);
-  child.stderr.on("data", (data) => { stderr += data.toString(); });
-  child.on("error", (err) => {
-    for (const id of pending.keys()) {
-      resolvePending(id, { error: { message: err.message } });
-    }
-  });
-  child.on("close", (code) => {
-    const message = stderr.trim().split("\n").pop() || `MCP server exited with code ${code}`;
-    for (const id of pending.keys()) {
-      resolvePending(id, { error: { message } });
-    }
-  });
-
-  const initResponse = waitForResponse(1, 10000, "MCP server did not initialize in time");
-  child.stdin.write(JSON.stringify({
-    jsonrpc: "2.0", id: 1, method: "initialize",
-    params: { protocolVersion: "2025-03-26", capabilities: {}, clientInfo: { name: "omnicode-indexer", version: "0.1" } },
-  }) + "\n");
-  const initialized = await initResponse;
-  if (initialized.error) throw new Error(initialized.error.message || "MCP server failed to initialize");
-
-  child.stdin.write(JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }) + "\n");
 
   const storeChunks = chunks.filter((chunk) => chunk.length >= 10);
   const workerCount = Math.min(Math.max(1, concurrency), storeChunks.length);
@@ -332,13 +367,12 @@ export async function callQdrantStore(chunks, env, concurrency = 10) {
   let nextId = 2;
 
   const storeChunk = async (chunk) => {
-    const id = nextId++;
-    const response = waitForResponse(id, 30000, `chunk ${id} timed out`)
+    const requestNumber = nextId++;
+    const response = server.request("tools/call", {
+      name: "qdrant-store",
+      arguments: { information: chunk },
+    }, 30000, `chunk ${requestNumber} timed out`)
       .catch((err) => ({ error: { message: err.message } }));
-    child.stdin.write(JSON.stringify({
-      jsonrpc: "2.0", id, method: "tools/call",
-      params: { name: "qdrant-store", arguments: { information: chunk } },
-    }) + "\n");
 
     const message = await response;
     if (message.error) {
@@ -355,14 +389,15 @@ export async function callQdrantStore(chunks, env, concurrency = 10) {
     }
   };
 
-  await Promise.all(Array.from({ length: workerCount }, () => worker()));
-
-  child.stdin.write(JSON.stringify({ jsonrpc: "2.0", method: "exit" }) + "\n");
-  child.stdin.end();
-  return results;
+  try {
+    await Promise.all(Array.from({ length: workerCount }, () => worker()));
+    return results;
+  } finally {
+    if (ownsServer) stopMcpServer(server);
+  }
 }
 
-export async function indexReferences(refsDir, qdrantConfig) {
+export async function indexReferences(refsDir, qdrantConfig, mcpServer = null) {
   const qdrantDir = join(process.cwd(), ".qdrant");
   const stateFile = join(qdrantDir, "index.json");
   const state = loadIndexState(stateFile);
@@ -403,14 +438,14 @@ export async function indexReferences(refsDir, qdrantConfig) {
   console.log(`[omnicode] index: storing ${allChunks.length} chunks`);
 
   try {
-    if (!(await verifyFastEmbedModel({ cacheDir: qdrantConfig.env.FASTEMBED_CACHE_PATH || getFastEmbedCacheDir() }))) {
+    if (!mcpServer && !(await verifyFastEmbedModel({ cacheDir: qdrantConfig.env.FASTEMBED_CACHE_PATH || getFastEmbedCacheDir() }))) {
       console.error("[omnicode] index: skipped because embedding model is unavailable");
       return;
     }
 
     const env = getQdrantStoreEnv(qdrantConfig);
     const concurrency = Number.parseInt(process.env.OMNICODE_INDEX_CONCURRENCY || "10", 10);
-    await callQdrantStore(allChunks.map((c) => c.text), env, Number.isFinite(concurrency) && concurrency > 0 ? concurrency : 10);
+    await callQdrantStore(allChunks.map((c) => c.text), env, Number.isFinite(concurrency) && concurrency > 0 ? concurrency : 10, mcpServer);
     console.log("[omnicode] index: complete");
   } catch (err) {
     console.error(`[omnicode] index: failed — ${err.message}`);

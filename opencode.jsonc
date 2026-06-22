@@ -13,6 +13,7 @@
     "qdrant": {
       "type": "local",
       "enabled": true,
+      "disabled": true,
       "command": [
         "uvx",
         "mcp-server-qdrant"
@@ -20,7 +21,8 @@
       "env": {
         "QDRANT_LOCAL_PATH": "/home/meyverick/dev/omnicode/.qdrant",
         "COLLECTION_NAME": "references",
-        "EMBEDDING_MODEL": "sentence-transformers/all-MiniLM-L6-v2"
+        "EMBEDDING_MODEL": "sentence-transformers/all-MiniLM-L6-v2",
+        "FASTEMBED_CACHE_PATH": "/home/meyverick/.cache/fastembed"
       }
     }
   }

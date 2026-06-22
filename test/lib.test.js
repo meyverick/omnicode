@@ -1,9 +1,22 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { EventEmitter } from "node:events";
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import { join } from "node:path";
-import { commandExists, getDataDir, getOpencodeDbPath, isProcessRunningAsync, generateQdrantConfig, ensureOpencodeConfig, detectQdrantMcp, walkReferences, chunkFile, loadIndexState, saveIndexState, getFastEmbedCacheDir, getFastEmbedModelPath, verifyFastEmbedModel, getQdrantStoreEnv } from "../src/installer/lib.js";
+import { commandExists, getDataDir, getOpencodeDbPath, isProcessRunningAsync, generateQdrantConfig, ensureOpencodeConfig, detectQdrantMcp, walkReferences, chunkFile, loadIndexState, saveIndexState, getFastEmbedCacheDir, getFastEmbedModelPath, verifyFastEmbedModel, getQdrantStoreEnv, startMcpServer, stopMcpServer, callQdrantStore } from "../src/installer/lib.js";
+
+function createFakeMcpProcess(handler = () => {}) {
+  const child = new EventEmitter();
+  child.stdout = new EventEmitter();
+  child.stderr = new EventEmitter();
+  child.stdin = {
+    write(data) { handler(JSON.parse(data), child); },
+    end() { child.stdinEnded = true; },
+  };
+  child.kill = () => { child.killed = true; };
+  return child;
+}
 
 describe("lib helpers", () => {
   it("commandExists returns true for a known command", () => {
@@ -39,6 +52,7 @@ describe("lib helpers", () => {
     const cfg = generateQdrantConfig();
     assert.equal(cfg.type, "local");
     assert.equal(cfg.enabled, true);
+    assert.equal(cfg.disabled, true);
     assert.ok(Array.isArray(cfg.command));
     assert.ok(cfg.command.includes("uvx"));
     assert.ok(cfg.command.includes("mcp-server-qdrant"));
@@ -60,6 +74,57 @@ describe("lib helpers", () => {
     const env = getQdrantStoreEnv(cfg);
     assert.equal(env.FASTEMBED_CACHE_PATH, cfg.env.FASTEMBED_CACHE_PATH);
     assert.ok(env.FASTEMBED_CACHE_PATH.endsWith("fastembed"));
+  });
+
+  it("startMcpServer initializes an MCP server", async () => {
+    const child = createFakeMcpProcess((message, fakeChild) => {
+      if (message.method === "initialize") {
+        queueMicrotask(() => fakeChild.stdout.emit("data", JSON.stringify({ jsonrpc: "2.0", id: message.id, result: {} }) + "\n"));
+      }
+    });
+
+    const server = await startMcpServer({ FASTEMBED_CACHE_PATH: "/tmp/test-fastembed" }, {
+      spawn: () => child,
+      initTimeout: 100,
+    });
+
+    assert.equal(server.child, child);
+    stopMcpServer(server);
+    assert.equal(child.stdinEnded, true);
+    assert.equal(child.killed, true);
+  });
+
+  it("startMcpServer fails on initialize timeout", async () => {
+    const child = createFakeMcpProcess();
+    await assert.rejects(
+      startMcpServer({ FASTEMBED_CACHE_PATH: "/tmp/test-fastembed" }, { spawn: () => child, initTimeout: 1 }),
+      /MCP server did not initialize in time/,
+    );
+  });
+
+  it("startMcpServer fails on process error", async () => {
+    const child = createFakeMcpProcess((_message, fakeChild) => {
+      queueMicrotask(() => fakeChild.emit("error", new Error("spawn failed")));
+    });
+    await assert.rejects(
+      startMcpServer({ FASTEMBED_CACHE_PATH: "/tmp/test-fastembed" }, { spawn: () => child, initTimeout: 100 }),
+      /spawn failed/,
+    );
+  });
+
+  it("callQdrantStore can use a pre-initialized MCP server", async () => {
+    const calls = [];
+    const server = {
+      request: async (method, params) => {
+        calls.push({ method, params });
+        return { result: {} };
+      },
+    };
+
+    const result = await callQdrantStore(["long enough chunk"], {}, 1, server);
+    assert.equal(result.length, 1);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].method, "tools/call");
   });
 
   it("getFastEmbedCacheDir returns a persistent cache path", () => {

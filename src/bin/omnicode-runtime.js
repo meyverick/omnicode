@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 
-import { commandExists, getDataDir, isPidAlive, isProcessRunningAsync, detectQdrantMcp, generateQdrantConfig, ensureOpencodeConfig, indexReferences } from "../installer/lib.js";
+import { commandExists, getDataDir, isPidAlive, isProcessRunningAsync, detectQdrantMcp, generateQdrantConfig, ensureOpencodeConfig, indexReferences, verifyFastEmbedModel, startMcpServer, stopMcpServer, getQdrantStoreEnv } from "../installer/lib.js";
 
 const MAX_OMNI_WAIT = 30;
 const OMNI_CHECK_DELAY = 1000;
@@ -166,11 +166,27 @@ export async function runRuntime(mode) {
 
   const hasQdrant = detectQdrantMcp();
   const refsDir = join(process.cwd(), "references");
+  let qdrantConfig = null;
+  let qdrantServer = null;
 
   if (hasQdrant) {
-    const qdrantConfig = generateQdrantConfig();
+    qdrantConfig = generateQdrantConfig();
     ensureOpencodeConfig(qdrantConfig);
     console.log("[omnicode] qdrant MCP configured");
+  }
+
+  if (hasQdrant && existsSync(refsDir) && qdrantConfig) {
+    const env = getQdrantStoreEnv(qdrantConfig);
+    if (await verifyFastEmbedModel({ cacheDir: env.FASTEMBED_CACHE_PATH })) {
+      try {
+        qdrantServer = await startMcpServer(env);
+        console.log("[omnicode] qdrant MCP ready");
+      } catch (err) {
+        console.log(`[omnicode] WARNING: qdrant MCP did not become ready; continuing without indexing. ${err.message}`);
+      }
+    } else {
+      console.log("[omnicode] WARNING: qdrant MCP disabled because embedding model is unavailable");
+    }
   }
 
   const launchOpencode = () => new Promise((resolve) => {
@@ -184,11 +200,11 @@ export async function runRuntime(mode) {
     child.on("close", () => resolve());
   });
 
-  if (hasQdrant && existsSync(refsDir)) {
-    const qdrantConfig = generateQdrantConfig();
+  if (qdrantServer && qdrantConfig) {
     const launch = launchOpencode();
-    indexReferences(refsDir, qdrantConfig).catch(() => {});
+    indexReferences(refsDir, qdrantConfig, qdrantServer).catch(() => {});
     await launch;
+    stopMcpServer(qdrantServer);
   } else {
     await launchOpencode();
   }
