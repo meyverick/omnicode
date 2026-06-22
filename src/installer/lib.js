@@ -1,6 +1,6 @@
 import { spawn, execFileSync, execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { existsSync, readFileSync, writeFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync } from "node:fs";
 import { join, basename, extname } from "node:path";
 import os from "node:os";
 
@@ -232,7 +232,8 @@ export async function callQdrantStore(chunks, env) {
 }
 
 export async function indexReferences(refsDir, qdrantConfig) {
-  const stateFile = join(process.cwd(), ".omnicode-index.json");
+  const qdrantDir = join(process.cwd(), ".qdrant");
+  const stateFile = join(qdrantDir, "index.json");
   const state = loadIndexState(stateFile);
 
   if (!existsSync(refsDir)) {
@@ -265,6 +266,8 @@ export async function indexReferences(refsDir, qdrantConfig) {
     saveIndexState(stateFile, state);
     return;
   }
+
+  try { mkdirSync(qdrantDir, { recursive: true }); } catch {}
 
   console.log(`[omnicode] index: storing ${allChunks.length} chunks`);
 
