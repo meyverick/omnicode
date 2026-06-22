@@ -123,7 +123,7 @@ async function stopOmnirouteIfIdle(pidFile) {
       }
       for (let i = 0; i < 10; i++) {
         if (!isPidAlive(pid)) break;
-        try { process.kill(pid, 0); } catch { break; }
+        await sleep(100);
       }
     }
     try { unlinkSync(pidFile); } catch {}
@@ -142,7 +142,16 @@ export async function runRuntime(mode) {
   }
 
   const cleanup = async () => { await stopOmnirouteIfIdle(pidFile); };
-  process.on("exit", () => {});
+  process.on("exit", () => {
+    try {
+      if (!existsSync(pidFile)) return;
+      const pid = parseInt(readFileSync(pidFile, "utf8").trim(), 10);
+      if (pid && isPidAlive(pid)) {
+        process.kill(-pid, "SIGTERM");
+      }
+      unlinkSync(pidFile);
+    } catch {}
+  });
   process.on("SIGINT", async () => { await cleanup(); process.exit(0); });
   process.on("SIGTERM", async () => { await cleanup(); process.exit(0); });
 
