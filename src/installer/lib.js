@@ -1,8 +1,10 @@
-import { execFileSync } from "node:child_process";
+import { execFileSync, execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import os from "node:os";
 
+const execFileAsync = promisify(execFile);
 const isWindows = process.platform === "win32";
 
 export function commandExists(command) {
@@ -28,7 +30,28 @@ export function isProcessRunning(name) {
       }
       return false;
     }
-    execFileSync("pgrep", ["-x", name], { stdio: "ignore" });
+    execFileSync("pgrep", ["-f", name], { stdio: "ignore" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function isProcessRunningAsync(name) {
+  try {
+    if (isWindows) {
+      const extensions = [".exe", ".cmd", ".bat"];
+      for (const ext of extensions) {
+        try {
+          const { stdout } = await execFileAsync("tasklist", ["/FI", `IMAGENAME eq ${name}${ext}`, "/NH"], {
+            encoding: "utf8",
+          });
+          if (stdout.includes(`${name}${ext}`)) return true;
+        } catch {}
+      }
+      return false;
+    }
+    await execFileAsync("pgrep", ["-f", name]);
     return true;
   } catch {
     return false;

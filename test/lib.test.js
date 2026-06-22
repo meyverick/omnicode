@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
-import { commandExists, getDataDir, getOpencodeDbPath } from "../src/installer/lib.js";
+import { commandExists, getDataDir, getOpencodeDbPath, isProcessRunningAsync } from "../src/installer/lib.js";
 
 describe("lib helpers", () => {
   it("commandExists returns true for a known command", () => {
@@ -22,5 +22,14 @@ describe("lib helpers", () => {
   it("getOpencodeDbPath returns null or a valid path ending in opencode.db", () => {
     const result = getOpencodeDbPath();
     assert.ok(result === null || (typeof result === "string" && result.endsWith("opencode.db")));
+  });
+
+  it("isProcessRunningAsync returns true for a known-running process", async () => {
+    const known = process.platform === "win32" ? "cmd" : "bash";
+    assert.equal(await isProcessRunningAsync(known), true);
+  });
+
+  it("isProcessRunningAsync returns false for a nonexistent process", async () => {
+    assert.equal(await isProcessRunningAsync("nonexistent-xyz-999"), false);
   });
 });
