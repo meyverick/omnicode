@@ -19,7 +19,7 @@ try {
 }
 
 export function printUsage() {
-  console.log(`Usage: omnicode [-s <session_id>] [-c] [--status] [--version]`);
+  console.log(`Usage: omnicode [-s <session_id>] [-c] [--status] [--version] [index]`);
 }
 
 let _cachedVersion = null;
@@ -64,7 +64,7 @@ export function parseArgs(argv) {
       continueSession = true;
       continue;
     }
-    if (arg === "--index") {
+    if (arg === "--index" || arg === "index") {
       return { sessionId: null, continueSession: false, index: true };
     }
     if (arg === "-s") {
