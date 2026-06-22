@@ -81,8 +81,7 @@ export function generateQdrantConfig() {
   return {
     type: "local",
     enabled: true,
-    command: "uvx",
-    args: ["mcp-server-qdrant"],
+    command: ["uvx", "mcp-server-qdrant"],
     env: {
       QDRANT_LOCAL_PATH: join(process.cwd(), ".qdrant"),
       COLLECTION_NAME: "references",

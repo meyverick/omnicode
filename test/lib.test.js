@@ -38,9 +38,9 @@ describe("lib helpers", () => {
     const cfg = generateQdrantConfig();
     assert.equal(cfg.type, "local");
     assert.equal(cfg.enabled, true);
-    assert.equal(cfg.command, "uvx");
-    assert.ok(Array.isArray(cfg.args));
-    assert.ok(cfg.args.includes("mcp-server-qdrant"));
+    assert.ok(Array.isArray(cfg.command));
+    assert.ok(cfg.command.includes("uvx"));
+    assert.ok(cfg.command.includes("mcp-server-qdrant"));
     assert.equal(cfg.env.COLLECTION_NAME, "references");
     assert.ok(cfg.env.QDRANT_LOCAL_PATH.endsWith(".qdrant"));
   });
