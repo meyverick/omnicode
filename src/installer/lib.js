@@ -555,17 +555,22 @@ export function warnIfMemoryPressure(thresholdPercent = 75) {
   return info.usedPercent < thresholdPercent;
 }
 
-const TEXT_EXTENSIONS = new Set([".md", ".txt", ".json", ".yaml", ".yml", ".ts", ".js", ".mjs", ".cjs", ".sh", ".bash", ".zsh", ".toml", ".cfg", ".conf", ".ini", ".env", ".gitignore", ".dockerfile", ".pdf", ".html", ".htm"]);
+const BINARY_DOC_EXTENSIONS = new Set([
+  ".pdf",
+  ".png", ".jpg", ".jpeg", ".jp2", ".webp", ".gif", ".bmp",
+  ".doc", ".docx",
+  ".ppt", ".pptx",
+  ".xls", ".xlsx"
+]);
+
+const TEXT_EXTENSIONS = new Set([
+  ".md", ".txt", ".json", ".yaml", ".yml", ".ts", ".js", ".mjs", ".cjs", ".sh", ".bash", ".zsh", ".toml", ".cfg", ".conf", ".ini", ".env", ".gitignore", ".dockerfile", ".html", ".htm",
+  ...BINARY_DOC_EXTENSIONS
+]);
 
 export function isComplexDocument(filePath, buffer) {
   const ext = extname(filePath).toLowerCase();
-  if (ext === ".md") return false; // Already markdown, no MinerU needed!
-  if (filePath.toLowerCase().endsWith(".pdf")) return true;
-  const content = buffer.toString("utf8");
-  const tableCount = (content.match(/<table/gi) || []).length;
-  const mathCount = (content.match(/\$\$/g) || []).length;
-  if (tableCount > 2 || mathCount > 5) return true;
-  return false;
+  return BINARY_DOC_EXTENSIONS.has(ext);
 }
 
 export async function* walkReferencesAsync(dir) {
@@ -853,7 +858,8 @@ export async function indexReferences(refsDir, qdrantConfig, mcpServer = null, f
                         console.warn(`[omnicode] index: MinerU API failed for ${file.path}, falling back to local chunking: ${err.message}`);
                     }
                     // Fallback to local
-                    const contentStr = file.path.toLowerCase().endsWith(".pdf") ? "PDF Content Placeholder" : fileBuffer.toString("utf8");
+                    const isBinaryDoc = BINARY_DOC_EXTENSIONS.has(extname(file.path).toLowerCase());
+                    const contentStr = isBinaryDoc ? "Binary Content Placeholder" : fileBuffer.toString("utf8");
                     let chunks = await chunkWithTreeSitter(contentStr, file.path);
                     let algo = "Tree-sitter (structural)";
                     if (!chunks) {
@@ -874,7 +880,8 @@ export async function indexReferences(refsDir, qdrantConfig, mcpServer = null, f
         }
 
         // Standard processing for non-complex or if API missing/disabled
-        const content = file.path.toLowerCase().endsWith(".pdf") ? "PDF Content Placeholder" : fileBuffer.toString("utf8");
+        const isBinaryDoc = BINARY_DOC_EXTENSIONS.has(extname(file.path).toLowerCase());
+        const content = isBinaryDoc ? "Binary Content Placeholder" : fileBuffer.toString("utf8");
         let chunks = await chunkWithTreeSitter(content, file.path);
         let algo = "Tree-sitter (structural)";
         if (!chunks) {
