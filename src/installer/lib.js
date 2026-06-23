@@ -14,7 +14,7 @@ const isWindows = process.platform === "win32";
 const FASTEMBED_MODEL_NAME = "BAAI/bge-small-en-v1.5";
 const FASTEMBED_MODEL_CACHE_DIR = "models--qdrant--bge-small-en-v1.5-onnx-q";
 const FASTEMBED_MIN_MODEL_SIZE = 40 * 1024 * 1024;
-const DEFAULT_INDEX_CONCURRENCY = 1;
+const DEFAULT_INDEX_CONCURRENCY = Math.max(1, Math.floor(os.cpus().length * 0.25));
 const FASTEMBED_WARMUP_SCRIPT = `from fastembed import TextEmbedding; list(TextEmbedding('${FASTEMBED_MODEL_NAME}').passage_embed(['warmup']))`;
 const QDRANT_INSTRUCTIONS_BEGIN = "<!-- qdrant:instructions:begin";
 const QDRANT_INSTRUCTIONS_END = "<!-- qdrant:instructions:end -->";
@@ -384,7 +384,7 @@ export function getFastEmbedModelPath(cacheDir = getFastEmbedCacheDir()) {
 
 export function getQdrantStoreEnv(qdrantConfig) {
   const unifiedConcurrency = qdrantConfig.env.INDEXING_CONCURRENCY || process.env.INDEXING_CONCURRENCY;
-  const threads = qdrantConfig.env.QRANT_NUM_THREADS || unifiedConcurrency || "1";
+  const threads = qdrantConfig.env.QRANT_NUM_THREADS || unifiedConcurrency || String(DEFAULT_INDEX_CONCURRENCY);
   return Object.assign({}, qdrantConfig.env, {
     OMP_NUM_THREADS: threads,
     ONNXRUNTIME_NUM_THREADS: threads,
