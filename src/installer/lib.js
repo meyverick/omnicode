@@ -20,7 +20,7 @@ const QDRANT_AGENTS_TEMPLATE = readFileSync(join(__dirname, "AGENTS.template.md"
 export function commandExists(command) {
   const tool = isWindows ? "where" : "which";
   try {
-    execFileSync(tool, [command], { stdio: "ignore" });
+    execFileSync(tool, [command], { stdio: "ignore", timeout: 5000 });
     return true;
   } catch {
     return false;
@@ -35,12 +35,13 @@ export function isProcessRunning(name) {
         const out = execFileSync("tasklist", ["/FI", `IMAGENAME eq ${name}${ext}`, "/NH"], {
           stdio: ["ignore", "pipe", "ignore"],
           encoding: "utf8",
+          timeout: 5000,
         });
         if (out.includes(`${name}${ext}`)) return true;
       }
       return false;
     }
-    execFileSync("pgrep", ["-f", name], { stdio: "ignore" });
+    execFileSync("pgrep", ["-f", name], { stdio: "ignore", timeout: 5000 });
     return true;
   } catch {
     return false;
@@ -51,17 +52,21 @@ export async function isProcessRunningAsync(name) {
   try {
     if (isWindows) {
       const extensions = [".exe", ".cmd", ".bat"];
-      for (const ext of extensions) {
+      const promises = extensions.map(async (ext) => {
         try {
           const { stdout } = await execFileAsync("tasklist", ["/FI", `IMAGENAME eq ${name}${ext}`, "/NH"], {
             encoding: "utf8",
+            timeout: 5000,
           });
-          if (stdout.includes(`${name}${ext}`)) return true;
-        } catch {}
-      }
-      return false;
+          return stdout.includes(`${name}${ext}`);
+        } catch {
+          return false;
+        }
+      });
+      const results = await Promise.all(promises);
+      return results.some((res) => res);
     }
-    await execFileAsync("pgrep", ["-f", name]);
+    await execFileAsync("pgrep", ["-f", name], { timeout: 5000 });
     return true;
   } catch {
     return false;
