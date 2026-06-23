@@ -21,8 +21,10 @@
       "env": {
         "QDRANT_LOCAL_PATH": "/home/meyverick/dev/omnicode/.qdrant",
         "COLLECTION_NAME": "references",
-        "EMBEDDING_MODEL": "sentence-transformers/all-MiniLM-L6-v2",
-        "FASTEMBED_CACHE_PATH": "/home/meyverick/.cache/fastembed"
+        "EMBEDDING_MODEL": "BAAI/bge-small-en-v1.5",
+        "FASTEMBED_CACHE_PATH": "/home/meyverick/.cache/fastembed",
+        "QRANT_NUM_THREADS": "1",
+        "QRANT_INDEX_CONCURRENCY": "1"
       }
     }
   }

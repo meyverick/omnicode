@@ -11,7 +11,7 @@
 - [x] 2.3 Replace `readFileSync` with `fs.promises.readFile` in the batch loop and inject `await new Promise(r => setImmediate(r))` to yield event loop between file chunking, updating the loop to flush to Qdrant dynamically (>20MB cumulative) instead of purely by file count to prevent V8 OOMs
 - [x] 2.4 Replace `walkReferences` with `walkReferencesAsync` using `fs.promises.readdir` (wrapped in try/catch to ignore EACCES/EPERM) and `fs.promises.stat`, walking sequentially/generator-style to avoid EMFILE limits
 - [x] 2.5 Convert `saveIndexState` to an atomic write: write JSON to a `.tmp` file via `fs.promises.writeFile`, then atomically rename it to `index.json` using `fs.promises.rename` to prevent catastrophic state corruption on fatal crashes
-- [ ] 2.6 Verify Ctrl+C exits within 5 seconds during indexing
+- [x] 2.6 Verify Ctrl+C exits within 5 seconds during indexing
 ## 3. Add batch timing and progress output
 
 - [x] 3.1 Log per-batch duration after each 100-file batch

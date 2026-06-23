@@ -98,7 +98,7 @@ export function generateQdrantConfig() {
       COLLECTION_NAME: "references",
       EMBEDDING_MODEL: FASTEMBED_MODEL_NAME,
       FASTEMBED_CACHE_PATH: getFastEmbedCacheDir(),
-      QRANT_NUM_THREADS: "2",
+      QRANT_NUM_THREADS: "1",
       QRANT_INDEX_CONCURRENCY: String(DEFAULT_INDEX_CONCURRENCY),
     },
   };
@@ -198,8 +198,10 @@ export function getFastEmbedModelPath(cacheDir = getFastEmbedCacheDir()) {
 
 export function getQdrantStoreEnv(qdrantConfig) {
   return Object.assign({}, qdrantConfig.env, {
-    OMP_NUM_THREADS: qdrantConfig.env.QRANT_NUM_THREADS || "2",
-    ORT_DEFAULT_NUM_THREADS: qdrantConfig.env.QRANT_NUM_THREADS || "2",
+    OMP_NUM_THREADS: qdrantConfig.env.QRANT_NUM_THREADS || "1",
+    ONNXRUNTIME_NUM_THREADS: qdrantConfig.env.QRANT_NUM_THREADS || "1",
+    UV_THREADPOOL_SIZE: qdrantConfig.env.QRANT_NUM_THREADS || "1",
+    ORT_DEFAULT_NUM_THREADS: qdrantConfig.env.QRANT_NUM_THREADS || "1",
     QDRANT_LOCAL_PATH: qdrantConfig.env.QDRANT_LOCAL_PATH,
     COLLECTION_NAME: qdrantConfig.env.COLLECTION_NAME,
     EMBEDDING_MODEL: qdrantConfig.env.EMBEDDING_MODEL,

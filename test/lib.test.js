@@ -75,9 +75,9 @@ describe("lib helpers", () => {
     const env = getQdrantStoreEnv(cfg);
     assert.equal(env.FASTEMBED_CACHE_PATH, cfg.env.FASTEMBED_CACHE_PATH);
     assert.ok(env.FASTEMBED_CACHE_PATH.endsWith("fastembed"));
-    assert.equal(env.QRANT_NUM_THREADS, "2");
+    assert.equal(env.QRANT_NUM_THREADS, "1");
     assert.equal(env.QRANT_INDEX_CONCURRENCY, "1");
-    assert.equal(env.OMP_NUM_THREADS, "2");
+    assert.equal(env.OMP_NUM_THREADS, "1");
   });
 
   it("ensureQdrantAgentInstructions creates AGENTS.md from template", () => {
