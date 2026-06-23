@@ -30,7 +30,7 @@ const EXTENSION_MAP = {
 // Tree-sitter must be initialized before use
 let parserInitialized = false;
 const LOADED_LANGUAGES_CACHE = new Map();
-let sharedParser = null;
+const parserPool = [];
 async function ensureParserInitialized() {
   if (!parserInitialized) {
     await Parser.init();
@@ -202,10 +202,7 @@ export async function chunkWithTreeSitter(content, filePath) {
   if (!language) return null; // Fall back to linear chunker
 
   await ensureParserInitialized();
-  if (!sharedParser) {
-    sharedParser = new Parser();
-  }
-  const parser = sharedParser;
+  const parser = parserPool.pop() || new Parser();
   parser.setLanguage(language);
 
   try {
@@ -267,5 +264,7 @@ export async function chunkWithTreeSitter(content, filePath) {
   } catch (err) {
     console.warn(`[omnicode] Tree-sitter parsing failed for ${filePath}: ${err.message}. Falling back to linear chunker.`);
     return null;
+  } finally {
+    parserPool.push(parser);
   }
 }

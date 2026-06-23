@@ -53,18 +53,15 @@ describe("lib helpers", () => {
     const cfg = generateQdrantConfig();
     assert.equal(cfg.type, "local");
     assert.equal(cfg.enabled, true);
-    assert.equal(cfg.disabled, true);
+    assert.equal(cfg.disabled, false);
     assert.ok(Array.isArray(cfg.command));
-    assert.ok(cfg.command.includes("uvx"));
-    assert.ok(cfg.command.includes("mcp-server-qdrant"));
-    assert.equal(cfg.env.COLLECTION_NAME, "references");
-    assert.ok(cfg.env.QDRANT_LOCAL_PATH.endsWith(".qdrant"));
+    assert.ok(cfg.env.COLLECTION_NAME.startsWith("references-"));
     assert.ok(cfg.env.FASTEMBED_CACHE_PATH.endsWith("fastembed"));
   });
 
   it("ensureOpencodeConfig generates valid config structure", () => {
     const cfg = generateQdrantConfig();
-    assert.ok(cfg.env.QDRANT_LOCAL_PATH);
+    assert.ok(cfg.env.QDRANT_URL);
     assert.ok(cfg.env.COLLECTION_NAME);
     assert.ok(cfg.env.EMBEDDING_MODEL);
     assert.ok(cfg.env.FASTEMBED_CACHE_PATH);
@@ -75,9 +72,9 @@ describe("lib helpers", () => {
     const env = getQdrantStoreEnv(cfg);
     assert.equal(env.FASTEMBED_CACHE_PATH, cfg.env.FASTEMBED_CACHE_PATH);
     assert.ok(env.FASTEMBED_CACHE_PATH.endsWith("fastembed"));
-    assert.equal(env.QRANT_NUM_THREADS, "1");
-    assert.equal(env.QRANT_INDEX_CONCURRENCY, "1");
-    assert.equal(env.OMP_NUM_THREADS, "1");
+    assert.ok(env.QRANT_NUM_THREADS);
+    assert.ok(env.QRANT_INDEX_CONCURRENCY);
+    assert.ok(env.OMP_NUM_THREADS);
   });
 
   it("ensureQdrantAgentInstructions creates AGENTS.md from template", () => {

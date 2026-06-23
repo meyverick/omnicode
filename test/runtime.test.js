@@ -68,14 +68,14 @@ describe("omnicode-runtime.js", () => {
     assert.ok(content.includes("unlinkSync"));
   });
 
-  it("starts MCP server before launching opencode", () => {
+  it("starts Qdrant container before launching opencode", () => {
     const content = readFileSync(runtimePath, "utf8");
-    assert.ok(content.includes("startMcpServer"));
-    assert.ok(content.indexOf("await startMcpServer") < content.indexOf("const launch = launchOpencode("));
+    assert.ok(content.includes("startQdrantContainer"));
+    assert.ok(content.indexOf("startQdrantContainer()") < content.indexOf("await launchOpencode()"));
   });
 
-  it("passes the ready Qdrant server to close handler", () => {
+  it("stops Qdrant container on close", () => {
     const content = readFileSync(runtimePath, "utf8");
-    assert.ok(content.includes("if (mcpServer) stopMcpServer(mcpServer)"));
+    assert.ok(content.includes("stopQdrantContainer()"));
   });
 });

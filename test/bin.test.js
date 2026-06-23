@@ -147,7 +147,7 @@ describe("printStatus", () => {
     } finally {
       console.log = originalLog;
     }
-    assert.deepEqual(lines, ["[omnicode] opencode: running", "[omnicode] omniroute: stopped", "[omnicode] qdrant: stopped"]);
+    assert.deepEqual(lines, ["[omnicode] opencode: running (true)", "[omnicode] omniroute: stopped", "[omnicode] qdrant: stopped", "[omnicode] indexing: false"]);
   });
 });
 
