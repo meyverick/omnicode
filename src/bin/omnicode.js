@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { readFileSync, realpathSync } from "node:fs";
+import { readFileSync, realpathSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -37,10 +37,12 @@ export function getVersion() {
 }
 
 export function getProcessStatus() {
+  const indexingLockPath = join(process.cwd(), ".qdrant", "indexing.lock");
   return {
     opencode: isProcessRunning("opencode"),
     omniroute: isProcessRunning("omniroute"),
     qdrant: isQdrantRunning(),
+    indexing: existsSync(indexingLockPath),
   };
 }
 
@@ -48,6 +50,7 @@ export function printStatus(status = getProcessStatus()) {
   console.log(`[omnicode] opencode: ${status.opencode ? "running" : "stopped"}`);
   console.log(`[omnicode] omniroute: ${status.omniroute ? "running" : "stopped"}`);
   console.log(`[omnicode] qdrant: ${status.qdrant ? "running" : "stopped"}`);
+  console.log(`[omnicode] indexing: ${status.indexing ? "true" : "false"}`);
 }
 
 export function parseArgs(argv) {

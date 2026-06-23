@@ -569,6 +569,8 @@ export async function indexReferences(refsDir, qdrantConfig, mcpServer = null, f
   process.on("SIGINT", onSigint);
 
   try {
+    const lockFile = join(qdrantDir, "indexing.lock");
+    try { writeFileSync(lockFile, "1"); } catch {}
     const env = getQdrantStoreEnv(qdrantConfig);
     let concurrency = Number.parseInt(env.QRANT_INDEX_CONCURRENCY || process.env.OMNICODE_INDEX_CONCURRENCY || String(DEFAULT_INDEX_CONCURRENCY), 10);
     if (isMemoryPressure) concurrency = 1;
@@ -582,6 +584,10 @@ export async function indexReferences(refsDir, qdrantConfig, mcpServer = null, f
 
     const flushBatch = async () => {
       if (batchChunks.length === 0) return;
+      if (mcpServer && mcpServer.closed) {
+        cancelled = true;
+        return;
+      }
       const start = Date.now();
       console.log(`[omnicode] index: storing batch of ${batchChunks.length} chunks (${filesProcessed}/${newFiles.length} files processed)`);
       
@@ -603,12 +609,12 @@ export async function indexReferences(refsDir, qdrantConfig, mcpServer = null, f
     };
 
     for (const file of newFiles) {
-      if (cancelled) break;
+      if (cancelled || (mcpServer && mcpServer.closed)) break;
       try {
         const content = await fsPromises.readFile(file.path, "utf8");
         await new Promise(r => setImmediate(r)); // yield event loop
         
-        if (cancelled) break;
+        if (cancelled || (mcpServer && mcpServer.closed)) break;
 
         const chunks = chunkFile(content, file.path);
         for (const c of chunks) {
@@ -639,5 +645,7 @@ export async function indexReferences(refsDir, qdrantConfig, mcpServer = null, f
     process.off("SIGINT", onSigint);
     if (ownsServer) stopMcpServer(mcpServer);
     await saveIndexState(stateFile, state);
+    const lockFile = join(qdrantDir, "indexing.lock");
+    try { rmSync(lockFile, { force: true }); } catch {}
   }
 }

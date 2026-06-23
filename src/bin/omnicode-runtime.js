@@ -149,10 +149,12 @@ export async function runRuntime(mode) {
 
   const cleanup = async () => {
     if (qdrantServer) stopMcpServer(qdrantServer);
+    try { unlinkSync(join(process.cwd(), ".qdrant", "indexing.lock")); } catch {}
     await stopOmnirouteIfIdle(pidFile);
   };
   process.on("exit", () => {
     if (qdrantServer) stopMcpServer(qdrantServer);
+    try { unlinkSync(join(process.cwd(), ".qdrant", "indexing.lock")); } catch {}
     try {
       if (!existsSync(pidFile)) return;
       const pid = parseInt(readFileSync(pidFile, "utf8").trim(), 10);
@@ -189,6 +191,9 @@ export async function runRuntime(mode) {
     try {
       qdrantServer = await startMcpServer(env, { pidFile: getQdrantPidFile() });
       console.log("[omnicode] qdrant MCP ready");
+      indexReferences(refsDir, qdrantConfig, qdrantServer).catch((err) => {
+        console.error(`[omnicode] background index failed: ${err.message}`);
+      });
     } catch (err) {
       console.log(`[omnicode] WARNING: qdrant MCP did not become ready; continuing without indexing. ${err.message}`);
     }
