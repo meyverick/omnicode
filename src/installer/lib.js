@@ -383,7 +383,7 @@ export function getFastEmbedModelPath(cacheDir = getFastEmbedCacheDir()) {
 
 
 export function getQdrantStoreEnv(qdrantConfig) {
-  const unifiedConcurrency = qdrantConfig.env.OMNICODE_INDEX_CONCURRENCY || process.env.OMNICODE_INDEX_CONCURRENCY;
+  const unifiedConcurrency = qdrantConfig.env.INDEXING_CONCURRENCY || process.env.INDEXING_CONCURRENCY;
   const threads = qdrantConfig.env.QRANT_NUM_THREADS || unifiedConcurrency || "1";
   return Object.assign({}, qdrantConfig.env, {
     OMP_NUM_THREADS: threads,
@@ -781,7 +781,7 @@ export async function indexReferences(refsDir, qdrantConfig, mcpServer = null, f
     const lockFile = join(qdrantDir, ".indexing");
     try { writeFileSync(lockFile, "1"); } catch {}
     const env = getQdrantStoreEnv(qdrantConfig);
-    const unifiedConcurrency = env.OMNICODE_INDEX_CONCURRENCY || process.env.OMNICODE_INDEX_CONCURRENCY;
+    const unifiedConcurrency = env.INDEXING_CONCURRENCY || process.env.INDEXING_CONCURRENCY;
     let concurrency = Number.parseInt(env.QRANT_INDEX_CONCURRENCY || unifiedConcurrency || String(DEFAULT_INDEX_CONCURRENCY), 10);
     if (isMemoryPressure) concurrency = 1;
     const workerConcurrency = Number.isFinite(concurrency) && concurrency > 0 ? concurrency : DEFAULT_INDEX_CONCURRENCY;

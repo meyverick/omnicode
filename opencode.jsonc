@@ -17,14 +17,14 @@
       "command": [
         "sh",
         "-c",
-        "QDRANT_URL=http://localhost:6333 COLLECTION_NAME=references-d4dc0a81-e297-46f7-820b-e1ce76afc50c EMBEDDING_MODEL=BAAI/bge-small-en-v1.5 FASTEMBED_CACHE_PATH=/home/meyverick/.cache/fastembed OMNICODE_INDEX_CONCURRENCY=4 uvx mcp-server-qdrant"
+        "QDRANT_URL=http://localhost:6333 COLLECTION_NAME=references-d4dc0a81-e297-46f7-820b-e1ce76afc50c EMBEDDING_MODEL=BAAI/bge-small-en-v1.5 FASTEMBED_CACHE_PATH=/home/meyverick/.cache/fastembed INDEXING_CONCURRENCY=4 uvx mcp-server-qdrant"
       ],
       "env": {
         "QDRANT_URL": "http://localhost:6333",
         "COLLECTION_NAME": "references-d4dc0a81-e297-46f7-820b-e1ce76afc50c",
         "EMBEDDING_MODEL": "BAAI/bge-small-en-v1.5",
         "FASTEMBED_CACHE_PATH": "/home/meyverick/.cache/fastembed",
-        "OMNICODE_INDEX_CONCURRENCY": "4"
+        "INDEXING_CONCURRENCY": "4"
       }
     }
   }
