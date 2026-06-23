@@ -29,6 +29,8 @@ const EXTENSION_MAP = {
 
 // Tree-sitter must be initialized before use
 let parserInitialized = false;
+const LOADED_LANGUAGES_CACHE = new Map();
+let sharedParser = null;
 async function ensureParserInitialized() {
   if (!parserInitialized) {
     await Parser.init();
@@ -52,12 +54,19 @@ export async function getOrDownloadLanguage(extension) {
     return null; // Unsupported language
   }
 
+  // Check memory cache first
+  if (LOADED_LANGUAGES_CACHE.has(grammarName)) {
+    return LOADED_LANGUAGES_CACHE.get(grammarName);
+  }
+
   const localWasmPath = path.join(GRAMMARS_CACHE_DIR, `tree-sitter-${grammarName}.wasm`);
 
   // 1. Check local cache
   if (fs.existsSync(localWasmPath)) {
     try {
-      return await Parser.Language.load(localWasmPath);
+      const lang = await Parser.Language.load(localWasmPath);
+      LOADED_LANGUAGES_CACHE.set(grammarName, lang);
+      return lang;
     } catch (err) {
       console.warn(`[omnicode] Error loading cached parser ${grammarName}: ${err.message}. Removing cache and retrying.`);
       fs.unlinkSync(localWasmPath);
@@ -79,7 +88,9 @@ export async function getOrDownloadLanguage(extension) {
     const buffer = Buffer.from(arrayBuffer);
     
     await fsPromises.writeFile(localWasmPath, buffer);
-    return await Parser.Language.load(localWasmPath);
+    const lang = await Parser.Language.load(localWasmPath);
+    LOADED_LANGUAGES_CACHE.set(grammarName, lang);
+    return lang;
   } catch (error) {
     console.warn(`[omnicode] Failed to download parser for ${grammarName}: ${error.message}. Falling back to linear chunking.`);
     return null;
@@ -191,7 +202,10 @@ export async function chunkWithTreeSitter(content, filePath) {
   if (!language) return null; // Fall back to linear chunker
 
   await ensureParserInitialized();
-  const parser = new Parser();
+  if (!sharedParser) {
+    sharedParser = new Parser();
+  }
+  const parser = sharedParser;
   parser.setLanguage(language);
 
   try {

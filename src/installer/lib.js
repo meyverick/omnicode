@@ -820,89 +820,109 @@ export async function indexReferences(refsDir, qdrantConfig, mcpServer = null, f
       await saveIndexState(stateFile, state);
     };
 
-    for (const file of newFiles) {
-      if (cancelled || (mcpServer && mcpServer.closed)) break;
-      try {
-        const fileBuffer = await fsPromises.readFile(file.path);
-        await new Promise(r => setImmediate(r)); // yield event loop
-        
+    const CONCURRENCY_LIMIT = 8;
+    const workers = [];
+    let fileIndex = 0;
+
+    const processNextFile = async () => {
+      while (fileIndex < newFiles.length) {
         if (cancelled || (mcpServer && mcpServer.closed)) break;
+        const file = newFiles[fileIndex++];
+        if (!file) continue;
 
-        const apiKey = process.env.MINERU_API_KEY;
-        const isComplex = isComplexDocument(file.path, fileBuffer);
+        try {
+          const fileBuffer = await fsPromises.readFile(file.path);
+          await new Promise(r => setImmediate(r)); // yield event loop
+          
+          if (cancelled || (mcpServer && mcpServer.closed)) break;
 
-        if (isComplex && apiKey && !minerUDisabled) {
-            const taskPromise = processComplexDocument(fileBuffer, basename(file.path), apiKey)
-                .then(async markdown => {
-                    if (cancelled || (mcpServer && mcpServer.closed)) return;
-                    // Append .md to ensure markdown chunking logic applies
-                    let chunks = await chunkWithTreeSitter(markdown, file.path + ".md");
-                    let algo = "Tree-sitter (structural)";
-                    if (!chunks) {
-                      chunks = chunkFile(markdown, file.path + ".md");
-                      algo = "Linear (sequential)";
-                    }
-                    console.log(`[omnicode] Indexed: ${file.path} (via MinerU) using ${algo} chunking`);
-                    for (const c of chunks) {
-                        batchChunks.push({ path: file.path, text: c });
-                        batchBytes += Buffer.byteLength(c, "utf8");
-                    }
-                    batchFiles.push(file);
-                    filesProcessed++;
-                })
-                .catch(async err => {
-                    if (err.status === 401 || err.status === 402) {
-                        console.warn(`[omnicode] index: MinerU API quota/auth error (${err.status}), disabling MinerU routing.`);
-                        minerUDisabled = true;
-                    } else {
-                        console.warn(`[omnicode] index: MinerU API failed for ${file.path}, falling back to local chunking: ${err.message}`);
-                    }
-                    // Fallback to local
-                    const isBinaryDoc = BINARY_DOC_EXTENSIONS.has(extname(file.path).toLowerCase());
-                    const contentStr = isBinaryDoc ? "Binary Content Placeholder" : fileBuffer.toString("utf8");
-                    let chunks = await chunkWithTreeSitter(contentStr, file.path);
-                    let algo = "Tree-sitter (structural)";
-                    if (!chunks) {
-                      chunks = chunkFile(contentStr, file.path);
-                      algo = "Linear (sequential)";
-                    }
-                    console.log(`[omnicode] Indexed: ${file.path} (local fallback) using ${algo} chunking`);
-                    for (const c of chunks) {
-                        batchChunks.push({ path: file.path, text: c });
-                        batchBytes += Buffer.byteLength(c, "utf8");
-                    }
-                    batchFiles.push(file);
-                    filesProcessed++;
-                });
-            
-            activeMinerUTasks.push(taskPromise);
-            continue; // Move to the next file immediately so MinerU processes concurrently
-        }
+          const apiKey = process.env.MINERU_API_KEY;
+          const isComplex = isComplexDocument(file.path, fileBuffer);
 
-        // Standard processing for non-complex or if API missing/disabled
-        const isBinaryDoc = BINARY_DOC_EXTENSIONS.has(extname(file.path).toLowerCase());
-        const content = isBinaryDoc ? "Binary Content Placeholder" : fileBuffer.toString("utf8");
-        let chunks = await chunkWithTreeSitter(content, file.path);
-        let algo = "Tree-sitter (structural)";
-        if (!chunks) {
-          chunks = chunkFile(content, file.path);
-          algo = "Linear (sequential)";
-        }
-        console.log(`[omnicode] Indexed: ${file.path} using ${algo} chunking`);
-        for (const c of chunks) {
-          batchChunks.push({ path: file.path, text: c });
-          batchBytes += Buffer.byteLength(c, "utf8");
-        }
-        batchFiles.push(file);
-        filesProcessed++;
+          if (isComplex && apiKey && !minerUDisabled) {
+              const taskPromise = processComplexDocument(fileBuffer, basename(file.path), apiKey)
+                  .then(async markdown => {
+                      if (cancelled || (mcpServer && mcpServer.closed)) return;
+                      // Append .md to ensure markdown chunking logic applies
+                      let chunks = await chunkWithTreeSitter(markdown, file.path + ".md");
+                      let algo = "Tree-sitter (structural)";
+                      if (!chunks) {
+                        chunks = chunkFile(markdown, file.path + ".md");
+                        algo = "Linear (sequential)";
+                      }
+                      console.log(`[omnicode] Indexed: ${file.path} (via MinerU) using ${algo} chunking`);
+                      for (const c of chunks) {
+                          batchChunks.push({ path: file.path, text: c });
+                          batchBytes += Buffer.byteLength(c, "utf8");
+                      }
+                      batchFiles.push(file);
+                      filesProcessed++;
+                      if (batchFiles.length >= 100 || batchBytes > 20_000_000) {
+                        await flushBatch();
+                      }
+                  })
+                  .catch(async err => {
+                      if (err.status === 401 || err.status === 402) {
+                          console.warn(`[omnicode] index: MinerU API quota/auth error (${err.status}), disabling MinerU routing.`);
+                          minerUDisabled = true;
+                      } else {
+                          console.warn(`[omnicode] index: MinerU API failed for ${file.path}, falling back to local chunking: ${err.message}`);
+                      }
+                      // Fallback to local
+                      const isBinaryDoc = BINARY_DOC_EXTENSIONS.has(extname(file.path).toLowerCase());
+                      const contentStr = isBinaryDoc ? "Binary Content Placeholder" : fileBuffer.toString("utf8");
+                      let chunks = await chunkWithTreeSitter(contentStr, file.path);
+                      let algo = "Tree-sitter (structural)";
+                      if (!chunks) {
+                        chunks = chunkFile(contentStr, file.path);
+                        algo = "Linear (sequential)";
+                      }
+                      console.log(`[omnicode] Indexed: ${file.path} (local fallback) using ${algo} chunking`);
+                      for (const c of chunks) {
+                          batchChunks.push({ path: file.path, text: c });
+                          batchBytes += Buffer.byteLength(c, "utf8");
+                      }
+                      batchFiles.push(file);
+                      filesProcessed++;
+                      if (batchFiles.length >= 100 || batchBytes > 20_000_000) {
+                        await flushBatch();
+                      }
+                  });
+              
+              activeMinerUTasks.push(taskPromise);
+              continue;
+          }
 
-        if (batchFiles.length >= 100 || batchBytes > 20_000_000) {
-          await flushBatch();
+          // Standard processing for non-complex or if API missing/disabled
+          const isBinaryDoc = BINARY_DOC_EXTENSIONS.has(extname(file.path).toLowerCase());
+          const content = isBinaryDoc ? "Binary Content Placeholder" : fileBuffer.toString("utf8");
+          let chunks = await chunkWithTreeSitter(content, file.path);
+          let algo = "Tree-sitter (structural)";
+          if (!chunks) {
+            chunks = chunkFile(content, file.path);
+            algo = "Linear (sequential)";
+          }
+          console.log(`[omnicode] Indexed: ${file.path} using ${algo} chunking`);
+          for (const c of chunks) {
+            batchChunks.push({ path: file.path, text: c });
+            batchBytes += Buffer.byteLength(c, "utf8");
+          }
+          batchFiles.push(file);
+          filesProcessed++;
+
+          if (batchFiles.length >= 100 || batchBytes > 20_000_000) {
+            await flushBatch();
+          }
+        } catch (err) {
+          console.warn(`[omnicode] index: skipping ${file.path} — ${err.message}`);
         }
-      } catch (err) {
-        console.warn(`[omnicode] index: skipping ${file.path} — ${err.message}`);
       }
+    };
+
+    for (let i = 0; i < CONCURRENCY_LIMIT; i++) {
+      workers.push(processNextFile());
     }
+    await Promise.all(workers);
     
     // Wait for any remaining asynchronous MinerU tasks to resolve before final flush
     await Promise.allSettled(activeMinerUTasks);
