@@ -558,6 +558,8 @@ export function warnIfMemoryPressure(thresholdPercent = 75) {
 const TEXT_EXTENSIONS = new Set([".md", ".txt", ".json", ".yaml", ".yml", ".ts", ".js", ".mjs", ".cjs", ".sh", ".bash", ".zsh", ".toml", ".cfg", ".conf", ".ini", ".env", ".gitignore", ".dockerfile", ".pdf", ".html", ".htm"]);
 
 export function isComplexDocument(filePath, buffer) {
+  const ext = extname(filePath).toLowerCase();
+  if (ext === ".md") return false; // Already markdown, no MinerU needed!
   if (filePath.toLowerCase().endsWith(".pdf")) return true;
   const content = buffer.toString("utf8");
   const tableCount = (content.match(/<table/gi) || []).length;
