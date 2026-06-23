@@ -212,16 +212,34 @@ export function resolveCollectionName() {
 }
 
 export function generateQdrantConfig() {
+  const collectionName = resolveCollectionName();
+  const cacheDir = getFastEmbedCacheDir();
+  
+  let command;
+  if (isWindows) {
+    command = [
+      "cmd.exe",
+      "/c",
+      `set QDRANT_URL=http://localhost:6333&& set COLLECTION_NAME=${collectionName}&& set EMBEDDING_MODEL=${FASTEMBED_MODEL_NAME}&& set FASTEMBED_CACHE_PATH=${cacheDir}&& set QRANT_NUM_THREADS=1&& set QRANT_INDEX_CONCURRENCY=${DEFAULT_INDEX_CONCURRENCY}&& uvx mcp-server-qdrant`
+    ];
+  } else {
+    command = [
+      "sh",
+      "-c",
+      `QDRANT_URL=http://localhost:6333 COLLECTION_NAME=${collectionName} EMBEDDING_MODEL=${FASTEMBED_MODEL_NAME} FASTEMBED_CACHE_PATH=${cacheDir} QRANT_NUM_THREADS=1 QRANT_INDEX_CONCURRENCY=${DEFAULT_INDEX_CONCURRENCY} uvx mcp-server-qdrant`
+    ];
+  }
+
   return {
     type: "local",
     enabled: true,
-    disabled: true,
-    command: ["uvx", "mcp-server-qdrant"],
+    disabled: false,
+    command,
     env: {
       QDRANT_URL: "http://localhost:6333",
-      COLLECTION_NAME: resolveCollectionName(),
+      COLLECTION_NAME: collectionName,
       EMBEDDING_MODEL: FASTEMBED_MODEL_NAME,
-      FASTEMBED_CACHE_PATH: getFastEmbedCacheDir(),
+      FASTEMBED_CACHE_PATH: cacheDir,
       QRANT_NUM_THREADS: "1",
       QRANT_INDEX_CONCURRENCY: String(DEFAULT_INDEX_CONCURRENCY),
     },
@@ -237,7 +255,7 @@ export function ensureOpencodeConfig(qdrantConfig) {
     } catch {}
     if (!config.mcp) config.mcp = {};
   }
-  config.mcp.qdrant = { ...qdrantConfig, disabled: true };
+  config.mcp.qdrant = { ...qdrantConfig, disabled: false };
   writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n", "utf8");
 }
 
