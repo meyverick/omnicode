@@ -397,11 +397,14 @@ export function getFastEmbedModelPath(cacheDir = getFastEmbedCacheDir()) {
 export function getQdrantStoreEnv(qdrantConfig) {
   const unifiedConcurrency = qdrantConfig.env.INDEXING_CONCURRENCY || process.env.INDEXING_CONCURRENCY;
   const threads = qdrantConfig.env.QRANT_NUM_THREADS || unifiedConcurrency || String(DEFAULT_INDEX_CONCURRENCY);
+  const indexConcurrency = qdrantConfig.env.QRANT_INDEX_CONCURRENCY || unifiedConcurrency || String(DEFAULT_INDEX_CONCURRENCY);
   return Object.assign({}, qdrantConfig.env, {
     OMP_NUM_THREADS: threads,
     ONNXRUNTIME_NUM_THREADS: threads,
     UV_THREADPOOL_SIZE: threads,
     ORT_DEFAULT_NUM_THREADS: threads,
+    QRANT_NUM_THREADS: threads,
+    QRANT_INDEX_CONCURRENCY: indexConcurrency,
     QDRANT_URL: qdrantConfig.env.QDRANT_URL,
     COLLECTION_NAME: qdrantConfig.env.COLLECTION_NAME,
     EMBEDDING_MODEL: qdrantConfig.env.EMBEDDING_MODEL,
@@ -666,7 +669,7 @@ export function loadIndexState(statePath) {
 }
 
 export async function saveIndexState(statePath, state) {
-  const tmpPath = statePath + ".tmp";
+  const tmpPath = `${statePath}.${randomUUID()}.tmp`;
   await fsPromises.writeFile(tmpPath, JSON.stringify(state, null, 2) + "\n", "utf8");
   await fsPromises.rename(tmpPath, statePath);
 }
