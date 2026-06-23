@@ -75,6 +75,8 @@ export async function submitExtractionTask(fileBuffer, fileName, apiKey) {
     // Wrap buffer in a Blob for FormData
     const blob = new Blob([fileBuffer]);
     formData.append('file', blob, fileName);
+    formData.append('language', 'en');
+    formData.append('is_ocr', 'true');
 
     const response = await fetchWithRetry(`${API_BASE}/extract/task`, {
         method: 'POST',
