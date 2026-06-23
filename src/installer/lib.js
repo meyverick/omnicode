@@ -572,7 +572,15 @@ const TEXT_EXTENSIONS = new Set([
 
 export function isComplexDocument(filePath, buffer) {
   const ext = extname(filePath).toLowerCase();
-  return BINARY_DOC_EXTENSIONS.has(ext);
+  if (!BINARY_DOC_EXTENSIONS.has(ext)) return false;
+
+  // Skip small images (under 50KB) as they are likely UI icons/assets rather than doc pages
+  const isImage = [".png", ".jpg", ".jpeg", ".jp2", ".webp", ".gif", ".bmp"].includes(ext);
+  if (isImage && buffer && buffer.length < 50 * 1024) {
+    return false;
+  }
+
+  return true;
 }
 
 export async function* walkReferencesAsync(dir) {
