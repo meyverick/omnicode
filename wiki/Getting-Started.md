@@ -1,27 +1,30 @@
 # Getting Started
 
-> **Platform note:** `omnicode` is written in Node.js and designed to work cross-platform, but it has only been developed and tested on **Ubuntu Linux**. Running on Windows, macOS, or other Linux distributions may uncover untested edge cases. Please report any issues you encounter.
+> **Platform note:** `omnicode` is written in Node.js and designed to work cross-platform, but it has only been developed and tested on **Ubuntu Linux**. Running on Windows, macOS, or other Linux distributions may uncover untested edge cases.
 
 ## Requirements
 
 - Linux, macOS, or Windows
-- Node.js 22 or later (developed and tested on Node 26; OmniRoute requires Node >=22 <=24)
+- Node.js 22 or later (OmniRoute requires Node >=22 <=24)
 - npm
 - [OpenCode](https://github.com/opencode-ai/opencode)
 - [OmniRoute](https://github.com/meyverick/omniroute)
 - (Optional) GrayMatter
 - (Optional) OpenSpec
+- (Optional) Docker — required for Qdrant vector indexing
+- (Optional) [MinerU](https://github.com/opendatalab/MinerU) — required for PDF/image OCR in complex documents
+- (Optional) [web-tree-sitter](https://github.com/tree-sitter/tree-sitter) — required for structural code chunking
 
 ## Install dependencies
 
-`omnicode` requires `opencode` and `omniroute` to be on your `PATH`. Install them before installing `omnicode`:
+`omnicode` requires `opencode` and `omniroute` on your `PATH`:
 
 ```bash
 npm install -g opencode
 npm install -g omniroute
 ```
 
-If you use GrayMatter or OpenSpec, install those too:
+Optional tools:
 
 ```bash
 # GrayMatter
@@ -34,10 +37,10 @@ npm install -g @fission-ai/openspec
 ## Install omnicode
 
 ```bash
-sudo npm install -g @meyverick/omnicode
+npm install -g @meyverick/omnicode
 ```
 
-No postinstall scripts run and no additional tools are installed.
+No postinstall scripts run. No additional tools are installed.
 
 ## Run
 
@@ -47,64 +50,52 @@ omnicode
 
 This will:
 
-1. Verify that `opencode` and `omniroute` are available, or exit with an error.
-2. Run GrayMatter initialization quietly if installed (output captured to `~/.local/share/omnicode/graymatter-init.log`).
-3. Run OpenSpec initialization quietly if installed (output captured to `~/.local/share/omnicode/openspec-init.log`).
-4. Start `omniroute --no-open` in the background, or reuse an already running instance.
-5. Look up the latest session for the current directory in the OpenCode database.
-6. Launch `opencode -s <session_id>` if a session exists, or plain `opencode` to create a new session.
+1. Verify `opencode` and `omniroute` are available.
+2. Run GrayMatter and OpenSpec initialization quietly (logs captured to `~/.local/share/omnicode/`).
+3. Start `omniroute --no-open` in the background.
+4. Start a Qdrant Docker container for vector indexing (if Docker is available).
+5. Begin indexing `./references/` in the background.
+6. Look up the latest OpenCode session for the current directory.
+7. Launch OpenCode.
 
-When OpenCode exits and no other OpenCode process is running, the OmniRoute process that `omnicode` started is stopped automatically.
+### Indexing
 
-### Resume a specific session
+If a `./references/` directory exists and Qdrant is enabled, omnicode indexes the reference files in the background. Indexing uses:
+
+- **BAAI/bge-small-en-v1.5** — lightweight embedding model (384 dimensions, ~65MB).
+- **Qdrant Docker container** — persistent vector storage at `localhost:6333`.
+- **MinerU** — OCR and layout parsing for PDFs and images (optional).
+- **web-tree-sitter** — structural code chunking (optional).
+
+Run indexing manually:
 
 ```bash
-omnicode -s <session_id>
+omnicode index
 ```
 
-This launches OpenCode with `opencode -s <session_id>`. OpenCode will error if that session does not exist.
-
-### Force continue last session
+Force a full re-index:
 
 ```bash
-omnicode -c
+omnicode index --force-reindex
 ```
 
-This forces the same latest-session lookup as plain `omnicode` but makes it explicit. If a session exists for the current directory, it is resumed via `opencode -s <session_id>`.
-
-### Check runtime status
+## Check status
 
 ```bash
 omnicode --status
 ```
 
-This prints whether `opencode` and `omniroute` processes are currently running.
-
-### Print version
-
-```bash
-omnicode --version
-```
+Shows whether OpenCode, OmniRoute, Qdrant, and any active indexers are running.
 
 ## Uninstall
 
 ```bash
-npm uninstall -g @meyverick/omnicode
+sudo npm uninstall -g @meyverick/omnicode
 ```
 
-This removes only the npm-managed `omnicode` package and command. The following remain installed and must be removed manually if desired:
-
-- OmniRoute (`npm uninstall -g omniroute`)
-- OpenCode (`npm uninstall -g opencode`)
-- OpenSpec (`npm uninstall -g @fission-ai/openspec`)
-- GrayMatter binary (`sudo rm /usr/local/bin/graymatter`)
-- Your OpenCode config in `~/.config/opencode/opencode.jsonc`
-- Runtime data in `~/.local/share/omnicode/`
-
-## Update
+To clean up Qdrant data:
 
 ```bash
-sudo npm install -g @meyverick/omnicode
+docker rm -f omnicode-qdrant 2>/dev/null
+rm -rf ~/.local/share/omnicode/qdrant-storage
 ```
-
-Reinstalling only updates the `omnicode` wrapper.

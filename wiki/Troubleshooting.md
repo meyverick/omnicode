@@ -1,33 +1,23 @@
 # Troubleshooting
 
-## `omnicode` is not on PATH
-
-After installing, if `omnicode` is not found, ensure the global npm bin directory is on `PATH`:
+## `omnicode` not on PATH
 
 ```bash
 export PATH="$(npm config get prefix)/bin:$PATH"
 ```
 
-Add that line to your shell profile (`~/.bashrc`, `~/.zshrc`, etc.) to make it persistent.
+Add to `~/.bashrc` or `~/.zshrc` to persist.
 
 ## Missing required tool
-
-If you see:
 
 ```text
 [omnicode] ERROR: missing required tool(s): opencode, omniroute
 ```
 
-Install the missing tool(s) globally and make sure they are on `PATH`:
-
 ```bash
 npm install -g opencode
 npm install -g omniroute
 ```
-
-## Platform not supported
-
-`omnicode` currently supports Ubuntu Linux on AMD64 only. Running on other platforms exits before making changes.
 
 ## OmniRoute does not start
 
@@ -37,37 +27,64 @@ Check the log:
 cat ~/.local/share/omnicode/omniroute.log
 ```
 
-Verify `omniroute --no-open` works when run directly.
-
-If you see a `better-sqlite3` native module error, it usually means OmniRoute is running under the wrong Node version. Ensure your current shell uses the same Node that OmniRoute was installed with:
-
-```bash
-which omniroute
-omniroute --version
-```
-
-If needed, rebuild:
-
-```bash
-cd $(dirname $(which omniroute))/../lib/node_modules/omniroute/dist && npm rebuild better-sqlite3
-```
-
-Or run:
+Verify `omniroute --no-open` works directly. For Node version mismatches:
 
 ```bash
 omniroute runtime repair
 ```
 
+## Qdrant container fails to start
+
+Requires Docker. Verify Docker is installed and running:
+
+```bash
+docker info
+```
+
+Manually start the container:
+
+```bash
+docker run -d --name omnicode-qdrant -p 6333:6333 -v ~/.local/share/omnicode/qdrant-storage:/qdrant/storage qdrant/qdrant
+```
+
+Check container logs:
+
+```bash
+docker logs omnicode-qdrant
+```
+
+## Duplicate MCP servers
+
+If `omnicode status` shows qdrant running but `qdrant-find` tools fail with `fast-all-minilm-l6-v2` errors, stale MCP server processes may be using an old model. Kill them:
+
+```bash
+pkill -f "mcp-server-qdrant"
+```
+
+OpenCode will respawn a fresh MCP server with the correct environment.
+
+## Qdrant tool calls fail with vector name mismatch
+
+Error: `Not existing vector name error: fast-all-minilm-l6-v2`
+
+The collection was created with a different embedding model. Re-index with the current model:
+
+```bash
+omnicode index --force-reindex
+```
+
+## System freeze during indexing
+
+If the computer becomes unresponsive during `omnicode index`, indexing now supports Ctrl+C to cancel safely. The MCP server is stopped and partial state is saved. On next run, only unindexed files are processed.
+
 ## GrayMatter or OpenSpec init fails
 
-Check the captured logs:
+Non-fatal. Check captured logs:
 
 ```bash
 cat ~/.local/share/omnicode/graymatter-init.log
 cat ~/.local/share/omnicode/openspec-init.log
 ```
-
-These failures are non-fatal; `omnicode` continues even if initialization fails.
 
 ## Check runtime status
 
@@ -75,17 +92,12 @@ These failures are non-fatal; `omnicode` continues even if initialization fails.
 omnicode --status
 ```
 
-This shows whether `opencode` and `omniroute` processes are currently running.
+Shows OpenCode, OmniRoute, Qdrant, and active indexers.
 
-## Rollback / manual cleanup
-
-If you want to fully remove everything `omnicode` touched:
+## Clean uninstall
 
 ```bash
-npm uninstall -g @meyverick/omnicode
-npm uninstall -g omniroute
-npm uninstall -g opencode
-npm uninstall -g @fission-ai/openspec
-sudo rm /usr/local/bin/graymatter
+sudo npm uninstall -g @meyverick/omnicode
 rm -rf ~/.local/share/omnicode
+docker rm -f omnicode-qdrant 2>/dev/null
 ```
