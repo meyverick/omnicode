@@ -1,0 +1,4 @@
+## 2024-06-23 - Add I/O Timeouts and Concurrency Improvements
+**Vulnerability:** Core logic in `src/installer/lib.js` used synchronous I/O commands (`execFileSync`) and asynchronous commands (`execFileAsync`) without timeouts. -> **Risk:** Denial of Service (DoS) due to indefinitely hanging child processes.
+**Learning:** Found critical missing timeout parameters across multiple shell execution calls that process untrusted external processes. Identified synchronous and sequential blocking execution on Windows process lookup, creating latency and blocking the main thread.
+**Prevention:** Added `timeout: 5000` to all `execFileSync` and `execFileAsync` API calls to enforce a 5-second failure boundary. Converted Windows sequential process lookup loop into a `Promise.all` concurrent execution model for optimal performance.
