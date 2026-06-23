@@ -5,6 +5,8 @@ import { join, basename, dirname, extname } from "node:path";
 import { fileURLToPath } from "node:url";
 import os from "node:os";
 import { randomUUID } from "node:crypto";
+import { processComplexDocument } from "./mineru-client.js";
+import { chunkWithTreeSitter } from "./tree-sitter.js";
 
 const execFileAsync = promisify(execFile);
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -553,7 +555,16 @@ export function warnIfMemoryPressure(thresholdPercent = 75) {
   return info.usedPercent < thresholdPercent;
 }
 
-const TEXT_EXTENSIONS = new Set([".md", ".txt", ".json", ".yaml", ".yml", ".ts", ".js", ".mjs", ".cjs", ".sh", ".bash", ".zsh", ".toml", ".cfg", ".conf", ".ini", ".env", ".gitignore", ".dockerfile"]);
+const TEXT_EXTENSIONS = new Set([".md", ".txt", ".json", ".yaml", ".yml", ".ts", ".js", ".mjs", ".cjs", ".sh", ".bash", ".zsh", ".toml", ".cfg", ".conf", ".ini", ".env", ".gitignore", ".dockerfile", ".pdf", ".html", ".htm"]);
+
+export function isComplexDocument(filePath, buffer) {
+  if (filePath.toLowerCase().endsWith(".pdf")) return true;
+  const content = buffer.toString("utf8");
+  const tableCount = (content.match(/<table/gi) || []).length;
+  const mathCount = (content.match(/\$\$/g) || []).length;
+  if (tableCount > 2 || mathCount > 5) return true;
+  return false;
+}
 
 export async function* walkReferencesAsync(dir) {
   try {
@@ -770,6 +781,8 @@ export async function indexReferences(refsDir, qdrantConfig, mcpServer = null, f
     let batchFiles = [];
     let batchChunks = [];
     let batchBytes = 0;
+    let minerUDisabled = false;
+    const activeMinerUTasks = [];
 
     const flushBatch = async () => {
       if (batchChunks.length === 0) return;
@@ -777,35 +790,96 @@ export async function indexReferences(refsDir, qdrantConfig, mcpServer = null, f
         cancelled = true;
         return;
       }
+
+      const currentChunks = batchChunks;
+      const currentFiles = batchFiles;
+      batchChunks = [];
+      batchFiles = [];
+      batchBytes = 0;
+
       const start = Date.now();
-      console.log(`[omnicode] index: storing batch of ${batchChunks.length} chunks (${filesProcessed}/${newFiles.length} files processed)`);
+      console.log(`[omnicode] index: storing batch of ${currentChunks.length} chunks (${filesProcessed}/${newFiles.length} files processed)`);
       
-      await callQdrantStore(batchChunks, env, workerConcurrency, mcpServer);
+      await callQdrantStore(currentChunks, env, workerConcurrency, mcpServer);
       
       const duration = Date.now() - start;
       console.log(`[omnicode] index: batch complete in ${duration}ms`);
       if (duration > 30000) console.warn(`[omnicode] index: WARNING: batch took > 30s to process!`);
 
-      totalStored += batchChunks.length;
-      for (const file of batchFiles) {
+      totalStored += currentChunks.length;
+      for (const file of currentFiles) {
         state[file.path] = file.mtimeMs;
       }
       await saveIndexState(stateFile, state);
-
-      batchFiles = [];
-      batchChunks = [];
-      batchBytes = 0;
     };
 
     for (const file of newFiles) {
       if (cancelled || (mcpServer && mcpServer.closed)) break;
       try {
-        const content = await fsPromises.readFile(file.path, "utf8");
+        const fileBuffer = await fsPromises.readFile(file.path);
         await new Promise(r => setImmediate(r)); // yield event loop
         
         if (cancelled || (mcpServer && mcpServer.closed)) break;
 
-        const chunks = chunkFile(content, file.path);
+        const apiKey = process.env.MINERU_API_KEY;
+        const isComplex = isComplexDocument(file.path, fileBuffer);
+
+        if (isComplex && apiKey && !minerUDisabled) {
+            const taskPromise = processComplexDocument(fileBuffer, basename(file.path), apiKey)
+                .then(async markdown => {
+                    if (cancelled || (mcpServer && mcpServer.closed)) return;
+                    // Append .md to ensure markdown chunking logic applies
+                    let chunks = await chunkWithTreeSitter(markdown, file.path + ".md");
+                    let algo = "Tree-sitter (structural)";
+                    if (!chunks) {
+                      chunks = chunkFile(markdown, file.path + ".md");
+                      algo = "Linear (sequential)";
+                    }
+                    console.log(`[omnicode] Indexed: ${file.path} (via MinerU) using ${algo} chunking`);
+                    for (const c of chunks) {
+                        batchChunks.push({ path: file.path, text: c });
+                        batchBytes += Buffer.byteLength(c, "utf8");
+                    }
+                    batchFiles.push(file);
+                    filesProcessed++;
+                })
+                .catch(async err => {
+                    if (err.status === 401 || err.status === 402) {
+                        console.warn(`[omnicode] index: MinerU API quota/auth error (${err.status}), disabling MinerU routing.`);
+                        minerUDisabled = true;
+                    } else {
+                        console.warn(`[omnicode] index: MinerU API failed for ${file.path}, falling back to local chunking: ${err.message}`);
+                    }
+                    // Fallback to local
+                    const contentStr = file.path.toLowerCase().endsWith(".pdf") ? "PDF Content Placeholder" : fileBuffer.toString("utf8");
+                    let chunks = await chunkWithTreeSitter(contentStr, file.path);
+                    let algo = "Tree-sitter (structural)";
+                    if (!chunks) {
+                      chunks = chunkFile(contentStr, file.path);
+                      algo = "Linear (sequential)";
+                    }
+                    console.log(`[omnicode] Indexed: ${file.path} (local fallback) using ${algo} chunking`);
+                    for (const c of chunks) {
+                        batchChunks.push({ path: file.path, text: c });
+                        batchBytes += Buffer.byteLength(c, "utf8");
+                    }
+                    batchFiles.push(file);
+                    filesProcessed++;
+                });
+            
+            activeMinerUTasks.push(taskPromise);
+            continue; // Move to the next file immediately so MinerU processes concurrently
+        }
+
+        // Standard processing for non-complex or if API missing/disabled
+        const content = file.path.toLowerCase().endsWith(".pdf") ? "PDF Content Placeholder" : fileBuffer.toString("utf8");
+        let chunks = await chunkWithTreeSitter(content, file.path);
+        let algo = "Tree-sitter (structural)";
+        if (!chunks) {
+          chunks = chunkFile(content, file.path);
+          algo = "Linear (sequential)";
+        }
+        console.log(`[omnicode] Indexed: ${file.path} using ${algo} chunking`);
         for (const c of chunks) {
           batchChunks.push({ path: file.path, text: c });
           batchBytes += Buffer.byteLength(c, "utf8");
@@ -821,6 +895,9 @@ export async function indexReferences(refsDir, qdrantConfig, mcpServer = null, f
       }
     }
     
+    // Wait for any remaining asynchronous MinerU tasks to resolve before final flush
+    await Promise.allSettled(activeMinerUTasks);
+
     if (!cancelled) await flushBatch();
     
     if (cancelled) {

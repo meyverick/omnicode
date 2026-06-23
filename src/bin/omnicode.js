@@ -9,6 +9,7 @@ process.on("unhandledRejection", (err) => {
 });
 
 import { commandExists, getOpencodeDbPath, isProcessRunning, detectQdrantMcp, generateQdrantConfig, ensureOpencodeConfig, indexReferences, isQdrantRunning, countProcesses, getQdrantRunningCount, countActiveIndexers } from "../installer/lib.js";
+import { downloadLanguageCmd } from "../installer/tree-sitter.js";
 import { runRuntime } from "./omnicode-runtime.js";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
@@ -85,6 +86,14 @@ export function parseArgs(argv) {
       index = true;
       continue;
     }
+    if (arg === "download-language") {
+      const language = argv[++i];
+      if (!language) {
+        console.error("[omnicode] ERROR: download-language requires a language argument");
+        process.exit(2);
+      }
+      return { downloadLanguage: language };
+    }
     if (arg === "-s") {
       sessionId = argv[++i];
       if (!sessionId) {
@@ -133,6 +142,11 @@ export async function resolveSessionMode(sessionId, latestSessionId = null) {
 
 async function main() {
   const args = parseArgs(process.argv);
+
+  if (args.downloadLanguage) {
+    const success = await downloadLanguageCmd(args.downloadLanguage);
+    process.exit(success ? 0 : 1);
+  }
 
   if (args.index) {
     if (!detectQdrantMcp()) {
