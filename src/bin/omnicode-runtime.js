@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync, writeFileSync, writeSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 
-import { commandExists, getDataDir, isPidAlive, isProcessRunningAsync, detectQdrantMcp, generateQdrantConfig, ensureOpencodeConfig, ensureQdrantAgentInstructions, indexReferences, startMcpServer, stopMcpServer, getQdrantStoreEnv, getQdrantPidFile, isQdrantRunning } from "../installer/lib.js";
+import { commandExists, getDataDir, isPidAlive, isProcessRunningAsync, detectQdrantMcp, generateQdrantConfig, ensureOpencodeConfig, ensureQdrantAgentInstructions, indexReferences, startMcpServer, stopMcpServer, getQdrantStoreEnv, getQdrantPidFile, isQdrantRunning, startQdrantContainer, stopQdrantContainer } from "../installer/lib.js";
 
 process.on("unhandledRejection", (err) => {
   console.error("[omnicode] runtime: UNHANDLED REJECTION:", err?.message || err);
@@ -115,6 +115,8 @@ async function stopOmnirouteIfIdle(pidFile) {
     return;
   }
 
+  stopQdrantContainer();
+
   if (existsSync(pidFile)) {
     let pid = null;
     try {
@@ -147,14 +149,13 @@ export async function runRuntime(mode) {
     process.umask(0o077);
   }
 
+  let startedIndexing = false;
   const cleanup = async () => {
-    if (qdrantServer) stopMcpServer(qdrantServer);
-    try { unlinkSync(join(process.cwd(), ".qdrant", "indexing.lock")); } catch {}
+    if (startedIndexing) try { unlinkSync(join(process.cwd(), ".qdrant", ".indexing")); } catch {}
     await stopOmnirouteIfIdle(pidFile);
   };
   process.on("exit", () => {
-    if (qdrantServer) stopMcpServer(qdrantServer);
-    try { unlinkSync(join(process.cwd(), ".qdrant", "indexing.lock")); } catch {}
+    if (startedIndexing) try { unlinkSync(join(process.cwd(), ".qdrant", ".indexing")); } catch {}
     try {
       if (!existsSync(pidFile)) return;
       const pid = parseInt(readFileSync(pidFile, "utf8").trim(), 10);
@@ -171,13 +172,13 @@ export async function runRuntime(mode) {
 
   await Promise.all([
     pid !== null ? waitForOmniroute(pid, logFile) : Promise.resolve(),
+    startQdrantContainer(),
     initTools(dataDir),
   ]);
 
   const hasQdrant = detectQdrantMcp();
   const refsDir = join(process.cwd(), "references");
   let qdrantConfig = null;
-  let qdrantServer = null;
 
   if (hasQdrant) {
     qdrantConfig = generateQdrantConfig();
@@ -186,20 +187,20 @@ export async function runRuntime(mode) {
     console.log("[omnicode] qdrant MCP configured");
   }
 
+  const ac = new AbortController();
   if (hasQdrant && existsSync(refsDir) && qdrantConfig) {
-    const env = getQdrantStoreEnv(qdrantConfig);
-    try {
-      qdrantServer = await startMcpServer(env, { pidFile: getQdrantPidFile() });
-      console.log("[omnicode] qdrant MCP ready");
-      indexReferences(refsDir, qdrantConfig, qdrantServer).catch((err) => {
+    if (existsSync(join(process.cwd(), ".qdrant", ".indexing"))) {
+      console.log("[omnicode] background indexing is already running, skipping");
+    } else {
+      startedIndexing = true;
+      console.log("[omnicode] background indexing started");
+      indexReferences(refsDir, qdrantConfig, null, false, ac.signal).catch((err) => {
         console.error(`[omnicode] background index failed: ${err.message}`);
       });
-    } catch (err) {
-      console.log(`[omnicode] WARNING: qdrant MCP did not become ready; continuing without indexing. ${err.message}`);
     }
   }
 
-  const launchOpencode = (mcpServer) => new Promise((resolve) => {
+  const launchOpencode = () => new Promise((resolve) => {
     const args = mode.flag === "-s" && mode.id ? ["-s", mode.id] : [];
     if (mode.flag === "-s" && mode.id) {
       console.log(`[omnicode] launching opencode (session: ${mode.id})`);
@@ -215,7 +216,6 @@ export async function runRuntime(mode) {
     console.warn = (...args) => writeSync(logFd, "WARN: " + args.join(" ") + "\n");
     console.error = (...args) => writeSync(logFd, "ERROR: " + args.join(" ") + "\n");
     child.on("close", () => {
-      if (mcpServer) stopMcpServer(mcpServer);
       setTimeout(() => {
         console.log = origLog;
         console.warn = origWarn;
@@ -226,10 +226,7 @@ export async function runRuntime(mode) {
     });
   });
 
-  if (qdrantServer && qdrantConfig) {
-    const launch = launchOpencode(qdrantServer);
-    await launch;
-  } else {
-    await launchOpencode(null);
-  }
+  await launchOpencode();
+  ac.abort();
+  await cleanup();
 }

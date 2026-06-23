@@ -1,9 +1,10 @@
 import { spawn, execFileSync, execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync, rmSync, promises as fsPromises } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync, rmSync, unlinkSync, promises as fsPromises } from "node:fs";
 import { join, basename, dirname, extname } from "node:path";
 import { fileURLToPath } from "node:url";
 import os from "node:os";
+import { randomUUID } from "node:crypto";
 
 const execFileAsync = promisify(execFile);
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -27,45 +28,37 @@ export function commandExists(command) {
   }
 }
 
-export function isProcessRunning(name) {
+export function countProcesses(name) {
   try {
     if (isWindows) {
+      let count = 0;
       const extensions = [".exe", ".cmd", ".bat"];
       for (const ext of extensions) {
         const out = execFileSync("tasklist", ["/FI", `IMAGENAME eq ${name}${ext}`, "/NH"], {
           stdio: ["ignore", "pipe", "ignore"],
           encoding: "utf8",
         });
-        if (out.includes(`${name}${ext}`)) return true;
+        const lines = out.trim().split("\n").filter(line => line.includes(`${name}${ext}`));
+        count += lines.length;
       }
-      return false;
+      return count;
     }
-    execFileSync("pgrep", ["-f", name], { stdio: "ignore" });
-    return true;
+    const out = execFileSync("pgrep", ["-f", name], {
+      stdio: ["ignore", "pipe", "ignore"],
+      encoding: "utf8",
+    });
+    return out.trim().split("\n").filter(Boolean).length;
   } catch {
-    return false;
+    return 0;
   }
 }
 
+export function isProcessRunning(name) {
+  return countProcesses(name) > 0;
+}
+
 export async function isProcessRunningAsync(name) {
-  try {
-    if (isWindows) {
-      const extensions = [".exe", ".cmd", ".bat"];
-      for (const ext of extensions) {
-        try {
-          const { stdout } = await execFileAsync("tasklist", ["/FI", `IMAGENAME eq ${name}${ext}`, "/NH"], {
-            encoding: "utf8",
-          });
-          if (stdout.includes(`${name}${ext}`)) return true;
-        } catch {}
-      }
-      return false;
-    }
-    await execFileAsync("pgrep", ["-f", name]);
-    return true;
-  } catch {
-    return false;
-  }
+  return isProcessRunning(name);
 }
 
 export function isPidAlive(pid) {
@@ -77,6 +70,104 @@ export function isPidAlive(pid) {
   }
 }
 
+export function getQdrantRunningCount() {
+  let count = 0;
+  const pidFile = getQdrantPidFile();
+  try {
+    const pid = parseInt(readFileSync(pidFile, "utf8").trim(), 10);
+    if (isPidAlive(pid)) count++;
+  } catch {}
+
+  // Fallback/Check: Check if the Docker container is running
+  if (commandExists("docker")) {
+    try {
+      const inspectOut = execFileSync("docker", ["inspect", "-f", "{{.State.Running}}", "omnicode-qdrant"], {
+        stdio: ["ignore", "pipe", "ignore"],
+        encoding: "utf8"
+      }).trim();
+      if (inspectOut === "true") count++;
+    } catch {}
+  }
+  return count;
+}
+
+export function countActiveIndexers() {
+  const cwds = new Set();
+  
+  if (isWindows) {
+    try {
+      const out = execFileSync("wmic", ["process", "where", "name='node.exe' or name='bun.exe'", "get", "CommandLine"], {
+        stdio: ["ignore", "pipe", "ignore"],
+        encoding: "utf8"
+      });
+      // Windows extraction is trickier, fallback to checking if any indexing lock exists
+      // But we can check if it contains opencode
+      if (out.includes("opencode")) {
+        // As a simple fallback on Windows, just check the current dir
+        if (existsSync(join(process.cwd(), ".qdrant", ".indexing"))) {
+          cwds.add(process.cwd());
+        }
+      }
+    } catch {}
+  } else {
+    try {
+      const out = execFileSync("pgrep", ["-f", "opencode"], {
+        stdio: ["ignore", "pipe", "ignore"],
+        encoding: "utf8"
+      });
+      const pids = out.trim().split("\n").filter(Boolean);
+      for (const pid of pids) {
+        try {
+          let cwd = null;
+          try {
+            cwd = readFileSync(`/proc/${pid}/cwd`); // This won't work, it's a symlink
+          } catch {}
+          if (!cwd) {
+             // Use readlink
+             try {
+                const linkOut = execFileSync("readlink", ["-e", `/proc/${pid}/cwd`], { encoding: "utf8" });
+                cwd = linkOut.trim();
+             } catch {}
+          }
+          if (!cwd && commandExists("pwdx")) {
+            try {
+              const pwdxOut = execFileSync("pwdx", [pid], { encoding: "utf8" });
+              const match = pwdxOut.match(/:\s*(.+)$/);
+              if (match) cwd = match[1].trim();
+            } catch {}
+          }
+          if (!cwd && commandExists("lsof")) {
+            try {
+              const lsofOut = execFileSync("lsof", ["-p", pid, "-a", "-d", "cwd", "-F", "n"], { encoding: "utf8" });
+              const lines = lsofOut.trim().split("\n");
+              if (lines.length > 1 && lines[1].startsWith("n")) cwd = lines[1].slice(1).trim();
+            } catch {}
+          }
+          
+          if (cwd) {
+            cwds.add(cwd);
+          }
+        } catch {}
+      }
+    } catch {}
+  }
+
+  // If no processes found or resolution failed, at least check the current workspace
+  if (cwds.size === 0) {
+     cwds.add(process.cwd());
+  }
+
+  let activeIndexers = 0;
+  for (const cwd of cwds) {
+    if (existsSync(join(cwd, ".qdrant", ".indexing"))) {
+      activeIndexers++;
+    }
+  }
+  
+  return activeIndexers;
+}
+
+
 export function detectQdrantMcp() {
   if (!commandExists("uvx")) return false;
   try {
@@ -87,6 +178,39 @@ export function detectQdrantMcp() {
   }
 }
 
+export function resolveCollectionName() {
+  const qdrantDir = join(process.cwd(), ".qdrant");
+  const idFile = join(qdrantDir, "id");
+
+  if (existsSync(qdrantDir)) {
+    const stat = statSync(qdrantDir);
+    if (stat.isFile()) {
+      try {
+        const id = readFileSync(qdrantDir, "utf8").trim();
+        unlinkSync(qdrantDir);
+        mkdirSync(qdrantDir, { recursive: true });
+        writeFileSync(idFile, id, "utf8");
+        if (id) return id;
+      } catch (e) {
+        console.warn("[omnicode] warning: failed to migrate .qdrant file to directory:", e.message);
+      }
+    } else if (stat.isDirectory()) {
+      if (existsSync(idFile)) {
+        try {
+          const id = readFileSync(idFile, "utf8").trim();
+          if (id) return id;
+        } catch {}
+      }
+    }
+  } else {
+    try { mkdirSync(qdrantDir, { recursive: true }); } catch {}
+  }
+
+  const newId = `references-${randomUUID()}`;
+  try { writeFileSync(idFile, newId, "utf8"); } catch {}
+  return newId;
+}
+
 export function generateQdrantConfig() {
   return {
     type: "local",
@@ -94,8 +218,8 @@ export function generateQdrantConfig() {
     disabled: true,
     command: ["uvx", "mcp-server-qdrant"],
     env: {
-      QDRANT_LOCAL_PATH: join(process.cwd(), ".qdrant"),
-      COLLECTION_NAME: "references",
+      QDRANT_URL: "http://localhost:6333",
+      COLLECTION_NAME: resolveCollectionName(),
       EMBEDDING_MODEL: FASTEMBED_MODEL_NAME,
       FASTEMBED_CACHE_PATH: getFastEmbedCacheDir(),
       QRANT_NUM_THREADS: "1",
@@ -161,10 +285,52 @@ export function isQdrantRunning() {
   const pidFile = getQdrantPidFile();
   try {
     const pid = parseInt(readFileSync(pidFile, "utf8").trim(), 10);
-    return isPidAlive(pid);
-  } catch {
-    return false;
+    if (isPidAlive(pid)) return true;
+  } catch {}
+
+  // Fallback: Check if the Docker container is running
+  if (commandExists("docker")) {
+    try {
+      const inspectOut = execFileSync("docker", ["inspect", "-f", "{{.State.Running}}", "omnicode-qdrant"], {
+        stdio: ["ignore", "pipe", "ignore"],
+        encoding: "utf8"
+      }).trim();
+      return inspectOut === "true";
+    } catch {}
   }
+  return false;
+}
+
+export async function startQdrantContainer() {
+  if (!commandExists("docker")) {
+    console.log("[omnicode] docker not found, skipping container initialization");
+    return;
+  }
+  const storagePath = join(getDataDir(), "qdrant-storage");
+  try { mkdirSync(storagePath, { recursive: true }); } catch {}
+  try {
+    execFileSync("docker", ["run", "-d", "--name", "omnicode-qdrant", "-p", "6333:6333", "-v", `${storagePath}:/qdrant/storage`, "qdrant/qdrant"], { stdio: "ignore" });
+    console.log("[omnicode] qdrant container started");
+  } catch {
+    // might be running already or conflict
+  }
+  
+  const start = Date.now();
+  while (Date.now() - start < 15000) {
+    try {
+      const res = await fetch("http://localhost:6333/readyz");
+      if (res.ok) return;
+    } catch {}
+    await new Promise(r => setTimeout(r, 500));
+  }
+  console.log("[omnicode] WARNING: qdrant container did not become ready in time");
+}
+
+export function stopQdrantContainer() {
+  if (!commandExists("docker")) return;
+  try {
+    execFileSync("docker", ["rm", "-f", "omnicode-qdrant"], { stdio: "ignore" });
+  } catch {}
 }
 
 export function cleanQdrantStaleData(qdrantConfig) {
@@ -202,7 +368,7 @@ export function getQdrantStoreEnv(qdrantConfig) {
     ONNXRUNTIME_NUM_THREADS: qdrantConfig.env.QRANT_NUM_THREADS || "1",
     UV_THREADPOOL_SIZE: qdrantConfig.env.QRANT_NUM_THREADS || "1",
     ORT_DEFAULT_NUM_THREADS: qdrantConfig.env.QRANT_NUM_THREADS || "1",
-    QDRANT_LOCAL_PATH: qdrantConfig.env.QDRANT_LOCAL_PATH,
+    QDRANT_URL: qdrantConfig.env.QDRANT_URL,
     COLLECTION_NAME: qdrantConfig.env.COLLECTION_NAME,
     EMBEDDING_MODEL: qdrantConfig.env.EMBEDDING_MODEL,
     FASTEMBED_CACHE_PATH: qdrantConfig.env.FASTEMBED_CACHE_PATH || getFastEmbedCacheDir(),
@@ -345,7 +511,7 @@ export async function startMcpServer(env, options = {}) {
 
 export function stopMcpServer(mcpServer) {
   if (!mcpServer || !mcpServer.child) return;
-  try { mcpServer.notify("exit"); } catch (e) { if (e) {} }
+  try { mcpServer.notify("exit", {}); } catch (e) { if (e) {} }
   try { mcpServer.child.stdin.end(); } catch (e) { if (e) {} }
   try { mcpServer.child.kill("SIGTERM"); } catch (e) { if (e) {} }
   const timer = setTimeout(() => {
@@ -500,7 +666,7 @@ export async function callQdrantStore(chunks, env, concurrency = DEFAULT_INDEX_C
   }
 }
 
-export async function indexReferences(refsDir, qdrantConfig, mcpServer = null, forceReindex = false) {
+export async function indexReferences(refsDir, qdrantConfig, mcpServer = null, forceReindex = false, abortSignal = null) {
   const qdrantDir = join(process.cwd(), ".qdrant");
   
   if (forceReindex) {
@@ -561,15 +727,20 @@ export async function indexReferences(refsDir, qdrantConfig, mcpServer = null, f
   }
 
   let cancelled = false;
-  const onSigint = () => {
+  const onCancel = () => {
+    if (cancelled) return;
     console.log("\n[omnicode] index: interrupted, saving partial state...");
     cancelled = true;
     if (mcpServer) stopMcpServer(mcpServer);
   };
+  const onSigint = onCancel;
   process.on("SIGINT", onSigint);
+  if (abortSignal) {
+    abortSignal.addEventListener("abort", onCancel);
+  }
 
   try {
-    const lockFile = join(qdrantDir, "indexing.lock");
+    const lockFile = join(qdrantDir, ".indexing");
     try { writeFileSync(lockFile, "1"); } catch {}
     const env = getQdrantStoreEnv(qdrantConfig);
     let concurrency = Number.parseInt(env.QRANT_INDEX_CONCURRENCY || process.env.OMNICODE_INDEX_CONCURRENCY || String(DEFAULT_INDEX_CONCURRENCY), 10);
@@ -643,9 +814,10 @@ export async function indexReferences(refsDir, qdrantConfig, mcpServer = null, f
     console.error(`[omnicode] index: failed — ${err.message}`);
   } finally {
     process.off("SIGINT", onSigint);
+    if (abortSignal) abortSignal.removeEventListener("abort", onCancel);
     if (ownsServer) stopMcpServer(mcpServer);
     await saveIndexState(stateFile, state);
-    const lockFile = join(qdrantDir, "indexing.lock");
+    const lockFile = join(qdrantDir, ".indexing");
     try { rmSync(lockFile, { force: true }); } catch {}
   }
 }

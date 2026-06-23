@@ -8,7 +8,7 @@ process.on("unhandledRejection", (err) => {
   process.exit(1);
 });
 
-import { commandExists, getOpencodeDbPath, isProcessRunning, detectQdrantMcp, generateQdrantConfig, ensureOpencodeConfig, indexReferences, isQdrantRunning } from "../installer/lib.js";
+import { commandExists, getOpencodeDbPath, isProcessRunning, detectQdrantMcp, generateQdrantConfig, ensureOpencodeConfig, indexReferences, isQdrantRunning, countProcesses, getQdrantRunningCount, countActiveIndexers } from "../installer/lib.js";
 import { runRuntime } from "./omnicode-runtime.js";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
@@ -37,20 +37,21 @@ export function getVersion() {
 }
 
 export function getProcessStatus() {
-  const indexingLockPath = join(process.cwd(), ".qdrant", "indexing.lock");
+  const indexingLockPath = join(process.cwd(), ".qdrant", ".indexing");
   return {
-    opencode: isProcessRunning("opencode"),
-    omniroute: isProcessRunning("omniroute"),
-    qdrant: isQdrantRunning(),
+    opencode: countProcesses("opencode"),
+    omniroute: countProcesses("omniroute"),
+    qdrant: getQdrantRunningCount(),
     indexing: existsSync(indexingLockPath),
+    indexingCount: countActiveIndexers(),
   };
 }
 
 export function printStatus(status = getProcessStatus()) {
-  console.log(`[omnicode] opencode: ${status.opencode ? "running" : "stopped"}`);
-  console.log(`[omnicode] omniroute: ${status.omniroute ? "running" : "stopped"}`);
-  console.log(`[omnicode] qdrant: ${status.qdrant ? "running" : "stopped"}`);
-  console.log(`[omnicode] indexing: ${status.indexing ? "true" : "false"}`);
+  console.log(`[omnicode] opencode: ${status.opencode > 0 ? `running (${status.opencode})` : "stopped"}`);
+  console.log(`[omnicode] omniroute: ${status.omniroute > 0 ? `running (${status.omniroute})` : "stopped"}`);
+  console.log(`[omnicode] qdrant: ${status.qdrant > 0 ? `running (${status.qdrant})` : "stopped"}`);
+  console.log(`[omnicode] indexing: ${status.indexing ? `true (${status.indexingCount})` : "false"}`);
 }
 
 export function parseArgs(argv) {
