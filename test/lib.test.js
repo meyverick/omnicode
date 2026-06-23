@@ -4,7 +4,7 @@ import { EventEmitter } from "node:events";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import { join } from "node:path";
-import { commandExists, getDataDir, getOpencodeDbPath, isProcessRunningAsync, generateQdrantConfig, ensureOpencodeConfig, ensureQdrantAgentInstructions, detectQdrantMcp, walkReferences, chunkFile, loadIndexState, saveIndexState, getFastEmbedCacheDir, getFastEmbedModelPath, verifyFastEmbedModel, getQdrantStoreEnv, startMcpServer, stopMcpServer, callQdrantStore } from "../src/installer/lib.js";
+import { commandExists, getDataDir, getOpencodeDbPath, isProcessRunningAsync, generateQdrantConfig, ensureOpencodeConfig, ensureQdrantAgentInstructions, detectQdrantMcp, walkReferencesAsync, chunkFile, loadIndexState, saveIndexState, getFastEmbedCacheDir, getFastEmbedModelPath, getQdrantStoreEnv, startMcpServer, stopMcpServer, callQdrantStore, indexReferences } from "../src/installer/lib.js";
 
 function createFakeMcpProcess(handler = () => {}) {
   const child = new EventEmitter();
@@ -13,6 +13,7 @@ function createFakeMcpProcess(handler = () => {}) {
   child.stdin = {
     write(data) { handler(JSON.parse(data), child); },
     end() { child.stdinEnded = true; },
+    on() {},
   };
   child.kill = () => { child.killed = true; };
   return child;
@@ -69,11 +70,14 @@ describe("lib helpers", () => {
     assert.ok(cfg.env.FASTEMBED_CACHE_PATH);
   });
 
-  it("getQdrantStoreEnv includes FASTEMBED_CACHE_PATH for MCP", () => {
+  it("getQdrantStoreEnv includes FASTEMBED_CACHE_PATH and thread/threads for MCP", () => {
     const cfg = generateQdrantConfig();
     const env = getQdrantStoreEnv(cfg);
     assert.equal(env.FASTEMBED_CACHE_PATH, cfg.env.FASTEMBED_CACHE_PATH);
     assert.ok(env.FASTEMBED_CACHE_PATH.endsWith("fastembed"));
+    assert.equal(env.QRANT_NUM_THREADS, "2");
+    assert.equal(env.QRANT_INDEX_CONCURRENCY, "1");
+    assert.equal(env.OMP_NUM_THREADS, "2");
   });
 
   it("ensureQdrantAgentInstructions creates AGENTS.md from template", () => {
@@ -178,7 +182,7 @@ describe("lib helpers", () => {
       },
     };
 
-    const result = await callQdrantStore(["long enough chunk"], {}, 1, server);
+    const result = await callQdrantStore([{ text: "long enough chunk", path: "test.md" }], {}, 1, server);
     assert.equal(result.length, 1);
     assert.equal(calls.length, 1);
     assert.equal(calls[0].method, "tools/call");
@@ -193,7 +197,7 @@ describe("lib helpers", () => {
   it("getFastEmbedModelPath finds an existing model.onnx", () => {
     const cacheDir = mkdtempSync(join(os.tmpdir(), "omnicode-fastembed-"));
     try {
-      const modelDir = join(cacheDir, "models--qdrant--all-MiniLM-L6-v2-onnx", "snapshots", "abc123");
+      const modelDir = join(cacheDir, "models--qdrant--bge-small-en-v1.5-onnx-q", "snapshots", "abc123");
       mkdirSync(modelDir, { recursive: true });
       const modelPath = join(modelDir, "model.onnx");
       writeFileSync(modelPath, "model");
@@ -203,97 +207,14 @@ describe("lib helpers", () => {
     }
   });
 
-  it("verifyFastEmbedModel returns true for a valid cached model", async () => {
-    const cacheDir = mkdtempSync(join(os.tmpdir(), "omnicode-fastembed-"));
-    try {
-      const modelDir = join(cacheDir, "models--qdrant--all-MiniLM-L6-v2-onnx", "snapshots", "abc123");
-      mkdirSync(modelDir, { recursive: true });
-      writeFileSync(join(modelDir, "model.onnx"), "valid-model");
-      let calls = 0;
-      const ok = await verifyFastEmbedModel({
-        cacheDir,
-        minModelSize: 1,
-        warmup: async () => { calls++; },
-      });
-      assert.equal(ok, true);
-      assert.equal(calls, 1);
-    } finally {
-      rmSync(cacheDir, { recursive: true, force: true });
-    }
-  });
 
-  it("verifyFastEmbedModel downloads when model is missing", async () => {
-    const cacheDir = mkdtempSync(join(os.tmpdir(), "omnicode-fastembed-"));
-    try {
-      let calls = 0;
-      const ok = await verifyFastEmbedModel({
-        cacheDir,
-        minModelSize: 1,
-        warmup: async () => {
-          calls++;
-          const modelDir = join(cacheDir, "models--qdrant--all-MiniLM-L6-v2-onnx", "snapshots", "abc123");
-          mkdirSync(modelDir, { recursive: true });
-          writeFileSync(join(modelDir, "model.onnx"), "valid-model");
-        },
-      });
-      assert.equal(ok, true);
-      assert.equal(calls, 2);
-    } finally {
-      rmSync(cacheDir, { recursive: true, force: true });
+  it("walkReferencesAsync yields objects", async () => {
+    const files = [];
+    for await (const file of walkReferencesAsync(process.cwd())) {
+      files.push(file);
+      if (files.length > 5) break;
     }
-  });
-
-  it("verifyFastEmbedModel repairs a truncated model", async () => {
-    const cacheDir = mkdtempSync(join(os.tmpdir(), "omnicode-fastembed-"));
-    try {
-      const modelDir = join(cacheDir, "models--qdrant--all-MiniLM-L6-v2-onnx", "snapshots", "abc123");
-      mkdirSync(modelDir, { recursive: true });
-      writeFileSync(join(modelDir, "model.onnx"), "x");
-      let calls = 0;
-      const ok = await verifyFastEmbedModel({
-        cacheDir,
-        minModelSize: 10,
-        warmup: async () => {
-          calls++;
-          mkdirSync(modelDir, { recursive: true });
-          writeFileSync(join(modelDir, "model.onnx"), "valid-model");
-        },
-      });
-      assert.equal(ok, true);
-      assert.equal(calls, 2);
-    } finally {
-      rmSync(cacheDir, { recursive: true, force: true });
-    }
-  });
-
-  it("verifyFastEmbedModel repairs a model that fails load validation", async () => {
-    const cacheDir = mkdtempSync(join(os.tmpdir(), "omnicode-fastembed-"));
-    try {
-      const modelDir = join(cacheDir, "models--qdrant--all-MiniLM-L6-v2-onnx", "snapshots", "abc123");
-      mkdirSync(modelDir, { recursive: true });
-      writeFileSync(join(modelDir, "model.onnx"), "valid-size");
-      let calls = 0;
-      const ok = await verifyFastEmbedModel({
-        cacheDir,
-        minModelSize: 1,
-        warmup: async () => {
-          calls++;
-          if (calls === 1) throw new Error("corrupt onnx");
-          mkdirSync(modelDir, { recursive: true });
-          writeFileSync(join(modelDir, "model.onnx"), "valid-model");
-        },
-      });
-      assert.equal(ok, true);
-      assert.equal(calls, 3);
-    } finally {
-      rmSync(cacheDir, { recursive: true, force: true });
-    }
-  });
-
-  it("walkReferences returns an array", () => {
-    const refsDir = getDataDir().replace("omnicode", "..").replace("/.local/share/..", "..");
-    const files = walkReferences(process.cwd());
-    assert.ok(Array.isArray(files));
+    assert.ok(files.length > 0);
   });
 
   it("chunkFile splits markdown by headings", () => {
@@ -317,9 +238,9 @@ describe("lib helpers", () => {
     assert.deepEqual(state, {});
   });
 
-  it("saveIndexState and loadIndexState round-trip", () => {
+  it("saveIndexState and loadIndexState round-trip", async () => {
     const statePath = join(process.cwd(), ".test-index-state.json");
-    saveIndexState(statePath, { "/test/file.md": 123456 });
+    await saveIndexState(statePath, { "/test/file.md": 123456 });
     const loaded = loadIndexState(statePath);
     assert.equal(loaded["/test/file.md"], 123456);
   });
@@ -351,7 +272,7 @@ describe("lib helpers", () => {
         return { result: {} };
       },
     };
-    const result = await callQdrantStore(["chunk one", "chunk two", "chunk three"], {}, 2, server);
+    const result = await callQdrantStore([{ text: "chunk one", path: "test.md" }, { text: "chunk two", path: "test.md" }, { text: "chunk three", path: "test.md" }], {}, 2, server);
     assert.equal(result.length, 1);
   });
 
@@ -359,5 +280,33 @@ describe("lib helpers", () => {
     const child = createFakeMcpProcess();
     child.killed = true;
     assert.doesNotThrow(() => stopMcpServer({ child, notify: () => {} }));
+  });
+
+  it("Ctrl+C mid-indexing saves partial state and aborts", async () => {
+    const refsDir = mkdtempSync(join(os.tmpdir(), "omnicode-test-refs-"));
+    const cwdSpy = process.cwd;
+    process.cwd = () => refsDir;
+
+    const server = {
+      request: async () => ({ result: {} }),
+      child: { kill: () => {}, stdin: { end: () => {} } },
+      notify: () => {},
+    };
+
+    try {
+      for (let i = 0; i < 50; i++) {
+        writeFileSync(join(refsDir, `file${i}.md`), `# File ${i}\nContent ${i}\n`);
+      }
+      
+      const p = indexReferences(refsDir, generateQdrantConfig(), server);
+      process.emit("SIGINT");
+      await p;
+      
+      const statePath = join(refsDir, ".qdrant", "index.json");
+      assert.ok(existsSync(statePath));
+    } finally {
+      process.cwd = cwdSpy;
+      rmSync(refsDir, { recursive: true, force: true });
+    }
   });
 });

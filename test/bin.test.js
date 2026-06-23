@@ -74,13 +74,15 @@ describe("omnicode.js CLI integration", () => {
 
 describe("parseArgs", () => {
   it("returns null sessionId when no -s is given", () => {
-    assert.deepEqual(parseArgs(["node", "omnicode.js"]), { sessionId: null, continueSession: false });
+    assert.deepEqual(parseArgs(["node", "omnicode.js"]), { sessionId: null, continueSession: false, index: false, forceReindex: false });
   });
 
   it("parses -s <id>", () => {
     assert.deepEqual(parseArgs(["node", "omnicode.js", "-s", "ses_abc"]), {
       sessionId: "ses_abc",
       continueSession: false,
+      index: false,
+      forceReindex: false,
     });
   });
 
@@ -88,11 +90,13 @@ describe("parseArgs", () => {
     assert.deepEqual(parseArgs(["node", "omnicode.js", "-ses_abc"]), {
       sessionId: "es_abc",
       continueSession: false,
+      index: false,
+      forceReindex: false,
     });
   });
 
   it("parses -c", () => {
-    assert.deepEqual(parseArgs(["node", "omnicode.js", "-c"]), { sessionId: null, continueSession: true });
+    assert.deepEqual(parseArgs(["node", "omnicode.js", "-c"]), { sessionId: null, continueSession: true, index: false, forceReindex: false });
   });
 });
 
@@ -139,11 +143,11 @@ describe("printStatus", () => {
     const originalLog = console.log;
     console.log = (line) => lines.push(line);
     try {
-      printStatus({ opencode: true, omniroute: false });
+      printStatus({ opencode: true, omniroute: false, qdrant: false });
     } finally {
       console.log = originalLog;
     }
-    assert.deepEqual(lines, ["[omnicode] opencode: running", "[omnicode] omniroute: stopped"]);
+    assert.deepEqual(lines, ["[omnicode] opencode: running", "[omnicode] omniroute: stopped", "[omnicode] qdrant: stopped"]);
   });
 });
 

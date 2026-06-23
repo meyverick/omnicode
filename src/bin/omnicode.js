@@ -8,7 +8,7 @@ process.on("unhandledRejection", (err) => {
   process.exit(1);
 });
 
-import { commandExists, getOpencodeDbPath, isProcessRunning, detectQdrantMcp, generateQdrantConfig, ensureOpencodeConfig, indexReferences } from "../installer/lib.js";
+import { commandExists, getOpencodeDbPath, isProcessRunning, detectQdrantMcp, generateQdrantConfig, ensureOpencodeConfig, indexReferences, isQdrantRunning } from "../installer/lib.js";
 import { runRuntime } from "./omnicode-runtime.js";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
@@ -40,17 +40,21 @@ export function getProcessStatus() {
   return {
     opencode: isProcessRunning("opencode"),
     omniroute: isProcessRunning("omniroute"),
+    qdrant: isQdrantRunning(),
   };
 }
 
 export function printStatus(status = getProcessStatus()) {
   console.log(`[omnicode] opencode: ${status.opencode ? "running" : "stopped"}`);
   console.log(`[omnicode] omniroute: ${status.omniroute ? "running" : "stopped"}`);
+  console.log(`[omnicode] qdrant: ${status.qdrant ? "running" : "stopped"}`);
 }
 
 export function parseArgs(argv) {
   let sessionId = null;
   let continueSession = false;
+  let index = false;
+  let forceReindex = false;
   for (let i = 2; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === "-h" || arg === "--help") {
@@ -69,8 +73,13 @@ export function parseArgs(argv) {
       continueSession = true;
       continue;
     }
+    if (arg === "--force-reindex") {
+      forceReindex = true;
+      continue;
+    }
     if (arg === "--index" || arg === "index") {
-      return { sessionId: null, continueSession: false, index: true };
+      index = true;
+      continue;
     }
     if (arg === "-s") {
       sessionId = argv[++i];
@@ -91,7 +100,7 @@ export function parseArgs(argv) {
       process.exit(2);
     }
   }
-  return { sessionId, continueSession };
+  return { sessionId, continueSession, index, forceReindex };
 }
 
 export async function getLatestSessionId(directory = realpathSync(process.cwd())) {
@@ -126,9 +135,14 @@ async function main() {
       console.error("[omnicode] ERROR: uvx mcp-server-qdrant not found. Install uvx first.");
       process.exit(1);
     }
+    if (isQdrantRunning()) {
+      console.error("[omnicode] ERROR: a qdrant MCP server is already running for this project.");
+      console.error("[omnicode]        Close the opencode session first, or wait for indexing to finish.");
+      process.exit(1);
+    }
     const qdrantConfig = generateQdrantConfig();
     ensureOpencodeConfig(qdrantConfig);
-    await indexReferences(join(process.cwd(), "references"), qdrantConfig);
+    await indexReferences(join(process.cwd(), "references"), qdrantConfig, null, args.forceReindex);
     process.exit(0);
   }
 

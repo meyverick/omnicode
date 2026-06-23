@@ -1,8 +1,8 @@
 import { spawn } from "node:child_process";
-import { closeSync, existsSync, mkdirSync, openSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, writeFileSync, writeSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 
-import { commandExists, getDataDir, isPidAlive, isProcessRunningAsync, detectQdrantMcp, generateQdrantConfig, ensureOpencodeConfig, ensureQdrantAgentInstructions, indexReferences, verifyFastEmbedModel, startMcpServer, stopMcpServer, getQdrantStoreEnv } from "../installer/lib.js";
+import { commandExists, getDataDir, isPidAlive, isProcessRunningAsync, detectQdrantMcp, generateQdrantConfig, ensureOpencodeConfig, ensureQdrantAgentInstructions, indexReferences, startMcpServer, stopMcpServer, getQdrantStoreEnv, getQdrantPidFile, isQdrantRunning } from "../installer/lib.js";
 
 process.on("unhandledRejection", (err) => {
   console.error("[omnicode] runtime: UNHANDLED REJECTION:", err?.message || err);
@@ -147,8 +147,12 @@ export async function runRuntime(mode) {
     process.umask(0o077);
   }
 
-  const cleanup = async () => { await stopOmnirouteIfIdle(pidFile); };
+  const cleanup = async () => {
+    if (qdrantServer) stopMcpServer(qdrantServer);
+    await stopOmnirouteIfIdle(pidFile);
+  };
   process.on("exit", () => {
+    if (qdrantServer) stopMcpServer(qdrantServer);
     try {
       if (!existsSync(pidFile)) return;
       const pid = parseInt(readFileSync(pidFile, "utf8").trim(), 10);
@@ -182,19 +186,15 @@ export async function runRuntime(mode) {
 
   if (hasQdrant && existsSync(refsDir) && qdrantConfig) {
     const env = getQdrantStoreEnv(qdrantConfig);
-    if (await verifyFastEmbedModel({ cacheDir: env.FASTEMBED_CACHE_PATH })) {
-      try {
-        qdrantServer = await startMcpServer(env);
-        console.log("[omnicode] qdrant MCP ready");
-      } catch (err) {
-        console.log(`[omnicode] WARNING: qdrant MCP did not become ready; continuing without indexing. ${err.message}`);
-      }
-    } else {
-      console.log("[omnicode] WARNING: qdrant MCP disabled because embedding model is unavailable");
+    try {
+      qdrantServer = await startMcpServer(env, { pidFile: getQdrantPidFile() });
+      console.log("[omnicode] qdrant MCP ready");
+    } catch (err) {
+      console.log(`[omnicode] WARNING: qdrant MCP did not become ready; continuing without indexing. ${err.message}`);
     }
   }
 
-  const launchOpencode = () => new Promise((resolve) => {
+  const launchOpencode = (mcpServer) => new Promise((resolve) => {
     const args = mode.flag === "-s" && mode.id ? ["-s", mode.id] : [];
     if (mode.flag === "-s" && mode.id) {
       console.log(`[omnicode] launching opencode (session: ${mode.id})`);
@@ -202,15 +202,29 @@ export async function runRuntime(mode) {
       console.log("[omnicode] launching opencode (new session)");
     }
     const child = spawn("opencode", args, { stdio: "inherit", cwd: process.cwd() });
-    child.on("close", () => resolve());
+    const logFd = openSync(join(dataDir, "background.log"), "w");
+    const origLog = console.log;
+    const origWarn = console.warn;
+    const origError = console.error;
+    console.log = (...args) => writeSync(logFd, args.join(" ") + "\n");
+    console.warn = (...args) => writeSync(logFd, "WARN: " + args.join(" ") + "\n");
+    console.error = (...args) => writeSync(logFd, "ERROR: " + args.join(" ") + "\n");
+    child.on("close", () => {
+      if (mcpServer) stopMcpServer(mcpServer);
+      setTimeout(() => {
+        console.log = origLog;
+        console.warn = origWarn;
+        console.error = origError;
+        try { closeSync(logFd); } catch {}
+        resolve();
+      }, 100);
+    });
   });
 
   if (qdrantServer && qdrantConfig) {
-    const launch = launchOpencode();
-    indexReferences(refsDir, qdrantConfig, qdrantServer).catch(() => {});
+    const launch = launchOpencode(qdrantServer);
     await launch;
-    stopMcpServer(qdrantServer);
   } else {
-    await launchOpencode();
+    await launchOpencode(null);
   }
 }

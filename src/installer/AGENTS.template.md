@@ -3,7 +3,7 @@
 
 Qdrant MCP [configured] -> execute semantic search over `./references/`.
 Index [maintained] via omnicode. Storage [isolated] -> `./.qdrant/` (local, zero external servers).
-Model -> `sentence-transformers/all-MiniLM-L6-v2` (384 dimensions).
+Model -> `BAAI/bge-small-en-v1.5` (384 dimensions).
 
 - `qdrant-store(information, metadata?, collection_name?)` -> embed && store text chunk. `information` -> target text. Default collection -> `references`.
 - `qdrant-find(query, collection_name?)` -> execute semantic search via natural-language `query` -> retrieve optimal matches.

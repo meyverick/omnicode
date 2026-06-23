@@ -1,6 +1,6 @@
 import { spawn, execFileSync, execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync, rmSync, promises as fsPromises } from "node:fs";
 import { join, basename, dirname, extname } from "node:path";
 import { fileURLToPath } from "node:url";
 import os from "node:os";
@@ -8,10 +8,10 @@ import os from "node:os";
 const execFileAsync = promisify(execFile);
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const isWindows = process.platform === "win32";
-const FASTEMBED_MODEL_CACHE_DIR = "models--qdrant--all-MiniLM-L6-v2-onnx";
-const FASTEMBED_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2";
-const FASTEMBED_MIN_MODEL_SIZE = 80 * 1024 * 1024;
-const DEFAULT_INDEX_CONCURRENCY = 3;
+const FASTEMBED_MODEL_NAME = "BAAI/bge-small-en-v1.5";
+const FASTEMBED_MODEL_CACHE_DIR = "models--qdrant--bge-small-en-v1.5-onnx-q";
+const FASTEMBED_MIN_MODEL_SIZE = 40 * 1024 * 1024;
+const DEFAULT_INDEX_CONCURRENCY = 1;
 const FASTEMBED_WARMUP_SCRIPT = `from fastembed import TextEmbedding; list(TextEmbedding('${FASTEMBED_MODEL_NAME}').passage_embed(['warmup']))`;
 const QDRANT_INSTRUCTIONS_BEGIN = "<!-- qdrant:instructions:begin";
 const QDRANT_INSTRUCTIONS_END = "<!-- qdrant:instructions:end -->";
@@ -96,8 +96,10 @@ export function generateQdrantConfig() {
     env: {
       QDRANT_LOCAL_PATH: join(process.cwd(), ".qdrant"),
       COLLECTION_NAME: "references",
-      EMBEDDING_MODEL: "sentence-transformers/all-MiniLM-L6-v2",
+      EMBEDDING_MODEL: FASTEMBED_MODEL_NAME,
       FASTEMBED_CACHE_PATH: getFastEmbedCacheDir(),
+      QRANT_NUM_THREADS: "2",
+      QRANT_INDEX_CONCURRENCY: String(DEFAULT_INDEX_CONCURRENCY),
     },
   };
 }
@@ -151,79 +153,90 @@ export function getFastEmbedCacheDir() {
   return join(os.homedir(), ".cache", "fastembed");
 }
 
+export function getQdrantPidFile() {
+  return join(getDataDir(), "qdrant.pid");
+}
+
+export function isQdrantRunning() {
+  const pidFile = getQdrantPidFile();
+  try {
+    const pid = parseInt(readFileSync(pidFile, "utf8").trim(), 10);
+    return isPidAlive(pid);
+  } catch {
+    return false;
+  }
+}
+
+export function cleanQdrantStaleData(qdrantConfig) {
+  const localPath = qdrantConfig?.env?.QDRANT_LOCAL_PATH;
+  if (!localPath) return;
+  const lockPath = join(localPath, ".lock");
+  const walPath = join(localPath, "collection", qdrantConfig?.env?.COLLECTION_NAME || "references", "wal");
+  try {
+    if (existsSync(lockPath)) {
+      rmSync(lockPath, { force: true });
+    }
+    if (existsSync(walPath)) {
+      rmSync(walPath, { recursive: true, force: true });
+    }
+  } catch {}
+}
+
 export function getFastEmbedModelPath(cacheDir = getFastEmbedCacheDir()) {
   const snapshotsDir = join(cacheDir, FASTEMBED_MODEL_CACHE_DIR, "snapshots");
   try {
     const snapshots = readdirSync(snapshotsDir, { withFileTypes: true })
       .filter((entry) => entry.isDirectory())
-      .map((entry) => join(snapshotsDir, entry.name, "model.onnx"));
+      .flatMap((entry) => ["model.onnx", "model_optimized.onnx"].map((f) => join(snapshotsDir, entry.name, f)));
     return snapshots.find((modelPath) => existsSync(modelPath)) || null;
   } catch {
     return null;
   }
 }
 
-async function runFastEmbedWarmup(cacheDir, timeout) {
-  await execFileAsync("uvx", ["--from", "mcp-server-qdrant", "python3", "-c", FASTEMBED_WARMUP_SCRIPT], {
-    env: { ...process.env, FASTEMBED_CACHE_PATH: cacheDir },
-    timeout,
-  });
-}
 
-export async function verifyFastEmbedModel(options = {}) {
-  const cacheDir = options.cacheDir || getFastEmbedCacheDir();
-  const minModelSize = options.minModelSize || FASTEMBED_MIN_MODEL_SIZE;
-  const warmup = options.warmup || runFastEmbedWarmup;
-  const loadTimeout = options.loadTimeout || 30000;
-  const downloadTimeout = options.downloadTimeout || 120000;
-  const modelCacheDir = join(cacheDir, FASTEMBED_MODEL_CACHE_DIR);
-
-  const validate = async () => {
-    const modelPath = getFastEmbedModelPath(cacheDir);
-    if (!modelPath) return false;
-    try {
-      if (statSync(modelPath).size < minModelSize) return false;
-      await warmup(cacheDir, loadTimeout);
-      return true;
-    } catch {
-      return false;
-    }
-  };
-
-  console.log("[omnicode] verifying embedding model...");
-  if (await validate()) {
-    console.log("[omnicode] embedding model OK");
-    return true;
-  }
-
-  console.log("[omnicode] embedding model corrupted, re-downloading...");
-  try {
-    rmSync(modelCacheDir, { recursive: true, force: true });
-    mkdirSync(cacheDir, { recursive: true });
-    await warmup(cacheDir, downloadTimeout);
-    if (await validate()) {
-      console.log("[omnicode] embedding model downloaded");
-      return true;
-    }
-  } catch {}
-
-  console.error(`[omnicode] index: failed to prepare FastEmbed model cache at ${cacheDir}`);
-  console.error("[omnicode] index: run `rm -rf <cache>` and retry, or check network access to HuggingFace.");
-  return false;
-}
 
 export function getQdrantStoreEnv(qdrantConfig) {
-  return {
+  return Object.assign({}, qdrantConfig.env, {
+    OMP_NUM_THREADS: qdrantConfig.env.QRANT_NUM_THREADS || "2",
+    ORT_DEFAULT_NUM_THREADS: qdrantConfig.env.QRANT_NUM_THREADS || "2",
     QDRANT_LOCAL_PATH: qdrantConfig.env.QDRANT_LOCAL_PATH,
     COLLECTION_NAME: qdrantConfig.env.COLLECTION_NAME,
     EMBEDDING_MODEL: qdrantConfig.env.EMBEDDING_MODEL,
     FASTEMBED_CACHE_PATH: qdrantConfig.env.FASTEMBED_CACHE_PATH || getFastEmbedCacheDir(),
-  };
+  });
 }
 
 export async function startMcpServer(env, options = {}) {
   const spawnFn = options.spawn || spawn;
   const initTimeout = options.initTimeout || 10000;
+  const pidFile = options.pidFile || null;
+
+  if (pidFile && existsSync(pidFile)) {
+    try {
+      const existingPid = parseInt(readFileSync(pidFile, "utf8").trim(), 10);
+      if (isPidAlive(existingPid)) {
+        console.log(`[omnicode] qdrant MCP already running (pid: ${existingPid})`);
+        return null;
+      }
+    } catch {}
+    try { rmSync(pidFile, { force: true }); } catch {}
+  }
+
+  const cacheDir = env.FASTEMBED_CACHE_PATH || getFastEmbedCacheDir();
+  const modelPath = getFastEmbedModelPath(cacheDir);
+  if (modelPath) {
+    try {
+      if (statSync(modelPath).size < FASTEMBED_MIN_MODEL_SIZE) {
+        console.log("[omnicode] index: embedding model appears corrupted or incomplete, MCP server will re-download it");
+        try { rmSync(join(cacheDir, FASTEMBED_MODEL_CACHE_DIR), { recursive: true, force: true }); } catch {}
+      }
+    } catch {}
+  } else {
+    console.log("[omnicode] index: embedding model not found, MCP server will download it during initialization (this may take a while)");
+  }
+
+  cleanQdrantStaleData({ env: { QDRANT_LOCAL_PATH: env.QDRANT_LOCAL_PATH, COLLECTION_NAME: env.COLLECTION_NAME } });
   const child = spawnFn("uvx", ["mcp-server-qdrant"], {
     env: { ...process.env, ...env, FASTEMBED_CACHE_PATH: env.FASTEMBED_CACHE_PATH || getFastEmbedCacheDir() },
     stdio: ["pipe", "pipe", "pipe"],
@@ -233,6 +246,7 @@ export async function startMcpServer(env, options = {}) {
   let buffer = "";
   let stderr = "";
   let nextId = 1;
+  let closed = false;
 
   const resolvePending = (id, message) => {
     if (!pending.has(id)) return;
@@ -243,6 +257,7 @@ export async function startMcpServer(env, options = {}) {
   };
 
   const rejectPending = (message) => {
+    closed = true;
     for (const id of pending.keys()) {
       resolvePending(id, { error: { message } });
     }
@@ -287,11 +302,16 @@ export async function startMcpServer(env, options = {}) {
   };
 
   child.stdout.on("data", parseMessages);
-  child.stderr.on("data", (data) => { stderr += data.toString(); });
+  child.stderr.on("data", (data) => {
+    stderr += data.toString();
+    if (stderr.length > 5000) stderr = stderr.substring(stderr.length - 5000);
+  });
+  child.stdin.on("error", () => {});
   child.on("error", (err) => { rejectPending(err.message); });
   child.on("close", (code) => {
     rejectPending(stderr.trim().split("\n").pop() || `MCP server exited with code ${code}`);
   });
+  process.on("exit", () => { try { child.kill("SIGKILL"); } catch {} });
 
   let initialized;
   try {
@@ -311,7 +331,14 @@ export async function startMcpServer(env, options = {}) {
 
   notify("notifications/initialized");
 
-  return { child, request, notify, pending };
+  if (pidFile) {
+    try {
+      mkdirSync(dirname(pidFile), { recursive: true });
+      writeFileSync(pidFile, String(child.pid), { mode: 0o600 });
+    } catch {}
+  }
+
+  return { child, request, notify, pending, pidFile, get closed() { return closed; } };
 }
 
 export function stopMcpServer(mcpServer) {
@@ -319,9 +346,11 @@ export function stopMcpServer(mcpServer) {
   try { mcpServer.notify("exit"); } catch (e) { if (e) {} }
   try { mcpServer.child.stdin.end(); } catch (e) { if (e) {} }
   try { mcpServer.child.kill("SIGTERM"); } catch (e) { if (e) {} }
-  setTimeout(() => {
+  const timer = setTimeout(() => {
     try { mcpServer.child.kill("SIGKILL"); } catch {}
+    if (mcpServer.pidFile) try { rmSync(mcpServer.pidFile, { force: true }); } catch {}
   }, 5000);
+  timer.unref();
 }
 
 export function getSystemMemoryInfo() {
@@ -340,30 +369,30 @@ export function warnIfMemoryPressure(thresholdPercent = 75) {
 
 const TEXT_EXTENSIONS = new Set([".md", ".txt", ".json", ".yaml", ".yml", ".ts", ".js", ".mjs", ".cjs", ".sh", ".bash", ".zsh", ".toml", ".cfg", ".conf", ".ini", ".env", ".gitignore", ".dockerfile"]);
 
-export function walkReferences(dir) {
-  const files = [];
+export async function* walkReferencesAsync(dir) {
   try {
-    const entries = readdirSync(dir, { withFileTypes: true });
+    const entries = await fsPromises.readdir(dir, { withFileTypes: true });
     for (const entry of entries) {
       const fullPath = join(dir, entry.name);
       if (entry.name.startsWith(".") || entry.name === "node_modules") continue;
       if (entry.isDirectory()) {
-        files.push(...walkReferences(fullPath));
+        yield* walkReferencesAsync(fullPath);
       } else if (entry.isFile()) {
         const ext = extname(entry.name).toLowerCase();
         const name = entry.name.toLowerCase();
         if (TEXT_EXTENSIONS.has(ext) || TEXT_EXTENSIONS.has(name)) {
-          const st = statSync(fullPath);
-          files.push({ path: fullPath, mtimeMs: st.mtimeMs });
+          const st = await fsPromises.stat(fullPath);
+          yield { path: fullPath, mtimeMs: st.mtimeMs };
         }
       }
     }
-  } catch {}
-  return files;
+  } catch (err) {
+    if (err.code !== "EACCES" && err.code !== "EPERM") throw err;
+  }
 }
 
 export function chunkFile(content, filePath) {
-  const chunks = [];
+  let chunks = [];
   const isMarkdown = filePath.endsWith(".md");
   if (isMarkdown) {
     const lines = content.split("\n");
@@ -385,7 +414,21 @@ export function chunkFile(content, filePath) {
       chunks.push(lines.slice(i, i + 50).join("\n").trim());
     }
   }
-  return chunks.filter((c) => c.length > 0);
+  
+  chunks = chunks.filter((c) => c.length > 0);
+  const finalChunks = [];
+  for (const chunk of chunks) {
+    if (chunk.length > 4000) {
+      let remaining = chunk;
+      while (remaining.length > 0) {
+        finalChunks.push(remaining.substring(0, 4000));
+        remaining = remaining.substring(4000);
+      }
+    } else {
+      finalChunks.push(chunk);
+    }
+  }
+  return finalChunks;
 }
 
 export function loadIndexState(statePath) {
@@ -396,8 +439,10 @@ export function loadIndexState(statePath) {
   }
 }
 
-export function saveIndexState(statePath, state) {
-  writeFileSync(statePath, JSON.stringify(state, null, 2) + "\n", "utf8");
+export async function saveIndexState(statePath, state) {
+  const tmpPath = statePath + ".tmp";
+  await fsPromises.writeFile(tmpPath, JSON.stringify(state, null, 2) + "\n", "utf8");
+  await fsPromises.rename(tmpPath, statePath);
 }
 
 export async function callQdrantStore(chunks, env, concurrency = DEFAULT_INDEX_CONCURRENCY, mcpServer = null) {
@@ -405,31 +450,43 @@ export async function callQdrantStore(chunks, env, concurrency = DEFAULT_INDEX_C
   const server = mcpServer || await startMcpServer(env);
   const results = [];
 
-  const storeChunks = chunks.filter((chunk) => chunk.length >= 10);
+  const storeChunks = chunks.filter((c) => c.text.length >= 10);
   const workerCount = Math.min(Math.max(1, concurrency), storeChunks.length);
   let nextChunk = 0;
   let nextId = 2;
+  let consecutiveTimeouts = 0;
 
-  const storeChunk = async (chunk) => {
+  const storeChunk = async (chunkObj) => {
     const requestNumber = nextId++;
     const response = server.request("tools/call", {
       name: "qdrant-store",
-      arguments: { information: chunk },
+      arguments: { information: chunkObj.text, metadata: { source: chunkObj.path } },
     }, 30000, `chunk ${requestNumber} timed out`)
       .catch((err) => ({ error: { message: err.message } }));
 
     const message = await response;
     if (message.error) {
       console.warn(`[omnicode] index: warning: ${message.error.message || "chunk failed"}`);
+      if (message.error.message && message.error.message.includes("timed out")) {
+        consecutiveTimeouts++;
+      } else {
+        consecutiveTimeouts = 0;
+      }
       return;
     }
-    results.push({ chunk: chunk.substring(0, 80), stored: true });
+    consecutiveTimeouts = 0;
+    results.push({ chunk: chunkObj.text.substring(0, 80), stored: true });
   };
 
   const worker = async () => {
-    while (nextChunk < storeChunks.length) {
-      const chunk = storeChunks[nextChunk++];
-      await storeChunk(chunk);
+    while (nextChunk < storeChunks.length && !server.closed) {
+      if (consecutiveTimeouts > 3) {
+        console.error("[omnicode] index: aborting batch due to 3+ consecutive timeouts (MCP deadlock detected)");
+        server.closed = true;
+        break;
+      }
+      const chunkObj = storeChunks[nextChunk++];
+      await storeChunk(chunkObj);
     }
   };
 
@@ -441,8 +498,14 @@ export async function callQdrantStore(chunks, env, concurrency = DEFAULT_INDEX_C
   }
 }
 
-export async function indexReferences(refsDir, qdrantConfig, mcpServer = null) {
+export async function indexReferences(refsDir, qdrantConfig, mcpServer = null, forceReindex = false) {
   const qdrantDir = join(process.cwd(), ".qdrant");
+  
+  if (forceReindex) {
+    console.log("[omnicode] index: forcing full reindex, clearing .qdrant directory...");
+    try { rmSync(qdrantDir, { recursive: true, force: true }); } catch {}
+  }
+  
   const stateFile = join(qdrantDir, "index.json");
   const state = loadIndexState(stateFile);
 
@@ -451,7 +514,22 @@ export async function indexReferences(refsDir, qdrantConfig, mcpServer = null) {
     return;
   }
 
-  const files = walkReferences(refsDir);
+  const files = [];
+  const currentPaths = new Set();
+  for await (const file of walkReferencesAsync(refsDir)) {
+    files.push(file);
+    currentPaths.add(file.path);
+  }
+
+  let stateChanged = false;
+  for (const path of Object.keys(state)) {
+    if (!currentPaths.has(path)) {
+      delete state[path];
+      stateChanged = true;
+    }
+  }
+  if (stateChanged) await saveIndexState(stateFile, state);
+
   const newFiles = files.filter((f) => (state[f.path] || 0) < f.mtimeMs);
 
   if (newFiles.length === 0) {
@@ -461,51 +539,103 @@ export async function indexReferences(refsDir, qdrantConfig, mcpServer = null) {
 
   console.log(`[omnicode] index: ${newFiles.length} files to index`);
 
-  if (!mcpServer && !(await verifyFastEmbedModel({ cacheDir: qdrantConfig.env.FASTEMBED_CACHE_PATH || getFastEmbedCacheDir() }))) {
-    console.error("[omnicode] index: skipped because embedding model is unavailable");
-    return;
-  }
-
-  if (!warnIfMemoryPressure()) {
-    console.warn("[omnicode] index: high memory pressure detected, reducing effective concurrency");
+  const isMemoryPressure = !warnIfMemoryPressure();
+  if (isMemoryPressure) {
+    console.warn("[omnicode] index: high memory pressure detected, forcing effective concurrency to 1");
   }
 
   try { mkdirSync(qdrantDir, { recursive: true }); } catch {}
 
-  try {
-    const env = getQdrantStoreEnv(qdrantConfig);
-    const concurrency = Number.parseInt(process.env.OMNICODE_INDEX_CONCURRENCY || String(DEFAULT_INDEX_CONCURRENCY), 10);
-    const workerConcurrency = Number.isFinite(concurrency) && concurrency > 0 ? concurrency : DEFAULT_INDEX_CONCURRENCY;
-    const BATCH_SIZE = 100;
-    let totalStored = 0;
-
-    for (let batchStart = 0; batchStart < newFiles.length; batchStart += BATCH_SIZE) {
-      const batchFiles = newFiles.slice(batchStart, batchStart + BATCH_SIZE);
-      const batchChunks = [];
-
-      for (const file of batchFiles) {
-        try {
-          const content = readFileSync(file.path, "utf8");
-          const chunks = chunkFile(content, file.path);
-          batchChunks.push(...chunks.map((c) => ({ path: file.path, text: c })));
-          state[file.path] = file.mtimeMs;
-        } catch (err) {
-          console.warn(`[omnicode] index: skipping ${file.path} — ${err.message}`);
-        }
-      }
-
-      if (batchChunks.length === 0) continue;
-
-      console.log(`[omnicode] index: storing batch of ${batchChunks.length} chunks (${batchStart + batchFiles.length}/${newFiles.length} files processed)`);
-      await callQdrantStore(batchChunks.map((c) => c.text), env, workerConcurrency, mcpServer);
-      totalStored += batchChunks.length;
-      saveIndexState(stateFile, state);
+  let ownsServer = false;
+  if (!mcpServer) {
+    try {
+      const env = getQdrantStoreEnv(qdrantConfig);
+      mcpServer = await startMcpServer(env);
+      ownsServer = true;
+    } catch (err) {
+      console.error(`[omnicode] index: failed to start MCP server — ${err.message}`);
+      return;
     }
-
-    console.log("[omnicode] index: complete");
-  } catch (err) {
-    console.error(`[omnicode] index: failed — ${err.message}`);
   }
 
-  saveIndexState(stateFile, state);
+  let cancelled = false;
+  const onSigint = () => {
+    console.log("\n[omnicode] index: interrupted, saving partial state...");
+    cancelled = true;
+    if (mcpServer) stopMcpServer(mcpServer);
+  };
+  process.on("SIGINT", onSigint);
+
+  try {
+    const env = getQdrantStoreEnv(qdrantConfig);
+    let concurrency = Number.parseInt(env.QRANT_INDEX_CONCURRENCY || process.env.OMNICODE_INDEX_CONCURRENCY || String(DEFAULT_INDEX_CONCURRENCY), 10);
+    if (isMemoryPressure) concurrency = 1;
+    const workerConcurrency = Number.isFinite(concurrency) && concurrency > 0 ? concurrency : DEFAULT_INDEX_CONCURRENCY;
+    let totalStored = 0;
+    let filesProcessed = 0;
+
+    let batchFiles = [];
+    let batchChunks = [];
+    let batchBytes = 0;
+
+    const flushBatch = async () => {
+      if (batchChunks.length === 0) return;
+      const start = Date.now();
+      console.log(`[omnicode] index: storing batch of ${batchChunks.length} chunks (${filesProcessed}/${newFiles.length} files processed)`);
+      
+      await callQdrantStore(batchChunks, env, workerConcurrency, mcpServer);
+      
+      const duration = Date.now() - start;
+      console.log(`[omnicode] index: batch complete in ${duration}ms`);
+      if (duration > 30000) console.warn(`[omnicode] index: WARNING: batch took > 30s to process!`);
+
+      totalStored += batchChunks.length;
+      for (const file of batchFiles) {
+        state[file.path] = file.mtimeMs;
+      }
+      await saveIndexState(stateFile, state);
+
+      batchFiles = [];
+      batchChunks = [];
+      batchBytes = 0;
+    };
+
+    for (const file of newFiles) {
+      if (cancelled) break;
+      try {
+        const content = await fsPromises.readFile(file.path, "utf8");
+        await new Promise(r => setImmediate(r)); // yield event loop
+        
+        if (cancelled) break;
+
+        const chunks = chunkFile(content, file.path);
+        for (const c of chunks) {
+          batchChunks.push({ path: file.path, text: c });
+          batchBytes += Buffer.byteLength(c, "utf8");
+        }
+        batchFiles.push(file);
+        filesProcessed++;
+
+        if (batchFiles.length >= 100 || batchBytes > 20_000_000) {
+          await flushBatch();
+        }
+      } catch (err) {
+        console.warn(`[omnicode] index: skipping ${file.path} — ${err.message}`);
+      }
+    }
+    
+    if (!cancelled) await flushBatch();
+    
+    if (cancelled) {
+      console.log("[omnicode] index: aborted by user");
+    } else {
+      console.log("[omnicode] index: complete");
+    }
+  } catch (err) {
+    console.error(`[omnicode] index: failed — ${err.message}`);
+  } finally {
+    process.off("SIGINT", onSigint);
+    if (ownsServer) stopMcpServer(mcpServer);
+    await saveIndexState(stateFile, state);
+  }
 }
