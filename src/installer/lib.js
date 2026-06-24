@@ -675,32 +675,49 @@ export async function saveIndexState(statePath, state) {
 }
 
 export function batchEmbedScript(modelName) {
-  return `
-import json, sys
-from fastembed import TextEmbedding
-texts = json.load(sys.stdin)
-model = TextEmbedding('${modelName}')
-embeddings = list(model.passage_embed(texts))
-vectors = [e.tolist() for e in embeddings]
-json.dump(vectors, sys.stdout)
-`;
+  return `import json, sys\nfrom fastembed import TextEmbedding\ntexts = json.load(sys.stdin)\nmodel = TextEmbedding('${modelName}')\nembeddings = list(model.passage_embed(texts))\nvectors = [e.tolist() for e in embeddings]\njson.dump(vectors, sys.stdout)`;
 }
 
 export async function batchEmbed(texts, env, options = {}) {
   const modelName = options.modelName || FASTEMBED_MODEL_NAME;
-  const timeout = options.timeout || 60000;
-  try {
-    const { stdout } = await execFileAsync("uvx", ["--from", "mcp-server-qdrant", "python3", "-c", batchEmbedScript(modelName)], {
-      input: JSON.stringify(texts),
+  const timeout = options.timeout || 120000;
+  return new Promise((resolve) => {
+    const child = spawn("uvx", ["--from", "mcp-server-qdrant", "python3", "-c", batchEmbedScript(modelName)], {
       env: { ...process.env, ...env, FASTEMBED_CACHE_PATH: env.FASTEMBED_CACHE_PATH || getFastEmbedCacheDir() },
-      timeout,
-      maxBuffer: 100 * 1024 * 1024,
+      stdio: ["pipe", "pipe", "pipe"],
     });
-    return JSON.parse(stdout.trim());
-  } catch (err) {
-    console.warn(`[omnicode] index: embedding failed — ${err.message || err}`);
-    return [];
-  }
+
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (d) => { stdout += d.toString(); });
+    child.stderr.on("data", (d) => { stderr += d.toString(); });
+
+    const timer = setTimeout(() => { child.kill(); }, timeout);
+
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      if (code !== 0 || !stdout.trim()) {
+        console.warn(`[omnicode] index: embedding failed — ${stderr.trim().split("\n").pop() || `exit code ${code}`}`);
+        resolve([]);
+        return;
+      }
+      try {
+        resolve(JSON.parse(stdout.trim()));
+      } catch (err) {
+        console.warn(`[omnicode] index: embedding output parse failed — ${err.message}`);
+        resolve([]);
+      }
+    });
+
+    child.on("error", (err) => {
+      clearTimeout(timer);
+      console.warn(`[omnicode] index: embedding failed — ${err.message}`);
+      resolve([]);
+    });
+
+    child.stdin.write(JSON.stringify(texts));
+    child.stdin.end();
+  });
 }
 
 export async function createQdrantCollection(collectionName) {
