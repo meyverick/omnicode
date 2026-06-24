@@ -17,11 +17,11 @@
       "command": [
         "sh",
         "-c",
-        "QDRANT_URL=http://localhost:6333 COLLECTION_NAME=references-df8d28cf-5be8-4ca7-abb5-b58855f3e088 EMBEDDING_MODEL=BAAI/bge-small-en-v1.5 FASTEMBED_CACHE_PATH=/home/meyverick/.cache/fastembed OMP_NUM_THREADS=4 ONNXRUNTIME_NUM_THREADS=4 ORT_DEFAULT_NUM_THREADS=4 UV_THREADPOOL_SIZE=4 RAYON_NUM_THREADS=4 INDEXING_CONCURRENCY=4 uvx mcp-server-qdrant"
+        "QDRANT_URL=http://localhost:6333 COLLECTION_NAME=references-77a7b571-3e00-495c-b4a0-9696cf915752 EMBEDDING_MODEL=BAAI/bge-small-en-v1.5 FASTEMBED_CACHE_PATH=/home/meyverick/.cache/fastembed OMP_NUM_THREADS=4 ONNXRUNTIME_NUM_THREADS=4 ORT_DEFAULT_NUM_THREADS=4 UV_THREADPOOL_SIZE=4 RAYON_NUM_THREADS=4 INDEXING_CONCURRENCY=4 uvx mcp-server-qdrant"
       ],
       "env": {
         "QDRANT_URL": "http://localhost:6333",
-        "COLLECTION_NAME": "references-df8d28cf-5be8-4ca7-abb5-b58855f3e088",
+        "COLLECTION_NAME": "references-77a7b571-3e00-495c-b4a0-9696cf915752",
         "EMBEDDING_MODEL": "BAAI/bge-small-en-v1.5",
         "FASTEMBED_CACHE_PATH": "/home/meyverick/.cache/fastembed",
         "INDEXING_CONCURRENCY": "4"
