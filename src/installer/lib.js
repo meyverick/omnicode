@@ -674,60 +674,131 @@ export async function saveIndexState(statePath, state) {
   await fsPromises.rename(tmpPath, statePath);
 }
 
-export async function callQdrantStore(chunks, env, concurrency = DEFAULT_INDEX_CONCURRENCY, mcpServer = null) {
-  const ownsServer = !mcpServer;
-  const server = mcpServer || await startMcpServer(env);
-  const results = [];
+export function batchEmbedScript(modelName) {
+  return `
+import json, sys
+from fastembed import TextEmbedding
+texts = json.load(sys.stdin)
+model = TextEmbedding('${modelName}')
+embeddings = list(model.passage_embed(texts))
+vectors = [e.tolist() for e in embeddings]
+json.dump(vectors, sys.stdout)
+`;
+}
 
-  const storeChunks = chunks.filter((c) => c.text.length >= 10);
-  const workerCount = Math.min(Math.max(1, concurrency), storeChunks.length);
-  let nextChunk = 0;
-  let nextId = 2;
-  let consecutiveTimeouts = 0;
-
-  const storeChunk = async (chunkObj) => {
-    const requestNumber = nextId++;
-    const response = server.request("tools/call", {
-      name: "qdrant-store",
-      arguments: { information: chunkObj.text, metadata: { source: chunkObj.path } },
-    }, 30000, `chunk ${requestNumber} timed out`)
-      .catch((err) => ({ error: { message: err.message } }));
-
-    const message = await response;
-    if (message.error) {
-      console.warn(`[omnicode] index: warning: ${message.error.message || "chunk failed"}`);
-      if (message.error.message && message.error.message.includes("timed out")) {
-        consecutiveTimeouts++;
-      } else {
-        consecutiveTimeouts = 0;
-      }
-      return;
-    }
-    consecutiveTimeouts = 0;
-    results.push({ chunk: chunkObj.text.substring(0, 80), stored: true });
-  };
-
-  const worker = async () => {
-    while (nextChunk < storeChunks.length && !server.closed) {
-      if (consecutiveTimeouts > 3) {
-        console.error("[omnicode] index: aborting batch due to 3+ consecutive timeouts (MCP deadlock detected)");
-        server.closed = true;
-        break;
-      }
-      const chunkObj = storeChunks[nextChunk++];
-      await storeChunk(chunkObj);
-    }
-  };
-
+export async function batchEmbed(texts, env, options = {}) {
+  const modelName = options.modelName || FASTEMBED_MODEL_NAME;
+  const timeout = options.timeout || 60000;
   try {
-    await Promise.all(Array.from({ length: workerCount }, () => worker()));
-    return results;
-  } finally {
-    if (ownsServer) stopMcpServer(server);
+    const { stdout } = await execFileAsync("uvx", ["--from", "mcp-server-qdrant", "python3", "-c", batchEmbedScript(modelName)], {
+      input: JSON.stringify(texts),
+      env: { ...process.env, ...env, FASTEMBED_CACHE_PATH: env.FASTEMBED_CACHE_PATH || getFastEmbedCacheDir() },
+      timeout,
+      maxBuffer: 100 * 1024 * 1024,
+    });
+    return JSON.parse(stdout.trim());
+  } catch (err) {
+    console.warn(`[omnicode] index: embedding failed — ${err.message || err}`);
+    return [];
   }
 }
 
-export async function indexReferences(refsDir, qdrantConfig, mcpServer = null, forceReindex = false, abortSignal = null) {
+export async function createQdrantCollection(collectionName) {
+  try {
+    const body = {
+      name: collectionName,
+      vectors: { size: 384, distance: "Cosine" },
+    };
+    const res = await fetch(`http://localhost:6333/collections/${encodeURIComponent(collectionName)}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok && res.status !== 409) {
+      console.warn(`[omnicode] index: failed to create collection — ${res.status}`);
+    }
+  } catch (err) {
+    console.warn(`[omnicode] index: qdrant server not reachable — ${err.message}`);
+  }
+}
+
+export async function ensureQdrantCollection(collectionName) {
+  try {
+    const res = await fetch(`http://localhost:6333/collections/${encodeURIComponent(collectionName)}`);
+    if (res.status === 404) {
+      await createQdrantCollection(collectionName);
+    }
+  } catch (err) {
+    console.warn(`[omnicode] index: qdrant server not reachable — ${err.message}`);
+  }
+}
+
+export async function upsertQdrantPoints(collectionName, points) {
+  try {
+    const body = { points };
+    const res = await fetch(`http://localhost:6333/collections/${encodeURIComponent(collectionName)}/points`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      console.warn(`[omnicode] index: failed to upsert points — ${res.status}: ${await res.text()}`);
+    }
+  } catch (err) {
+    console.warn(`[omnicode] index: qdrant server not reachable — ${err.message}`);
+  }
+}
+
+export async function embedAndStore(chunks, env) {
+  const collectionName = env.COLLECTION_NAME;
+  if (!collectionName) {
+    console.error("[omnicode] index: COLLECTION_NAME is required");
+    return [];
+  }
+
+  await ensureQdrantCollection(collectionName);
+
+  const storeChunks = chunks.filter((c) => c.text.length >= 10);
+  if (storeChunks.length === 0) return [];
+
+  const texts = storeChunks.map((c) => c.text);
+  const vectors = await batchEmbed(texts, env);
+  if (vectors.length === 0) {
+    console.warn("[omnicode] index: no embeddings returned, skipping storage");
+    return [];
+  }
+
+  if (vectors.length !== storeChunks.length) {
+    console.warn(`[omnicode] index: embedding count mismatch (${vectors.length} vs ${storeChunks.length}), skipping`);
+    return [];
+  }
+
+  const POINTS_BATCH = 100;
+  let pointId = 0;
+  const allIds = [];
+
+  for (let i = 0; i < storeChunks.length; i += POINTS_BATCH) {
+    const batchPoints = [];
+    for (let j = i; j < Math.min(i + POINTS_BATCH, storeChunks.length); j++) {
+      pointId++;
+      batchPoints.push({
+        id: pointId,
+        vector: vectors[j],
+        payload: { source: storeChunks[j].path, text: storeChunks[j].text },
+      });
+    }
+    await upsertQdrantPoints(collectionName, batchPoints);
+    allIds.push(...batchPoints.map((p) => p.id));
+  }
+
+  return allIds.map((id, idx) => ({ chunk: storeChunks[idx].text.substring(0, 80), stored: true }));
+}
+
+export async function callQdrantStore(chunks, env, _concurrency = DEFAULT_INDEX_CONCURRENCY, _mcpServer = null) {
+  return embedAndStore(chunks, env);
+}
+
+export async function indexReferences(refsDir, qdrantConfig, _mcpServer = null, forceReindex = false, abortSignal = null) {
   const qdrantDir = join(process.cwd(), ".qdrant");
   
   if (forceReindex) {
@@ -775,24 +846,11 @@ export async function indexReferences(refsDir, qdrantConfig, mcpServer = null, f
 
   try { mkdirSync(qdrantDir, { recursive: true }); } catch {}
 
-  let ownsServer = false;
-  if (!mcpServer) {
-    try {
-      const env = getQdrantStoreEnv(qdrantConfig);
-      mcpServer = await startMcpServer(env);
-      ownsServer = true;
-    } catch (err) {
-      console.error(`[omnicode] index: failed to start MCP server — ${err.message}`);
-      return;
-    }
-  }
-
   let cancelled = false;
   const onCancel = () => {
     if (cancelled) return;
     console.log("\n[omnicode] index: interrupted, saving partial state...");
     cancelled = true;
-    if (mcpServer) stopMcpServer(mcpServer);
   };
   const onSigint = onCancel;
   process.on("SIGINT", onSigint);
@@ -804,10 +862,6 @@ export async function indexReferences(refsDir, qdrantConfig, mcpServer = null, f
     const lockFile = join(qdrantDir, ".indexing");
     try { writeFileSync(lockFile, "1"); } catch {}
     const env = getQdrantStoreEnv(qdrantConfig);
-    const unifiedConcurrency = env.INDEXING_CONCURRENCY || process.env.INDEXING_CONCURRENCY;
-    let concurrency = Number.parseInt(env.QRANT_INDEX_CONCURRENCY || unifiedConcurrency || String(DEFAULT_INDEX_CONCURRENCY), 10);
-    if (isMemoryPressure) concurrency = 1;
-    const workerConcurrency = Number.isFinite(concurrency) && concurrency > 0 ? concurrency : DEFAULT_INDEX_CONCURRENCY;
     let totalStored = 0;
     let filesProcessed = 0;
 
@@ -819,10 +873,7 @@ export async function indexReferences(refsDir, qdrantConfig, mcpServer = null, f
 
     const flushBatch = async () => {
       if (batchChunks.length === 0) return;
-      if (mcpServer && mcpServer.closed) {
-        cancelled = true;
-        return;
-      }
+      if (cancelled) return;
 
       const currentChunks = batchChunks;
       const currentFiles = batchFiles;
@@ -832,9 +883,9 @@ export async function indexReferences(refsDir, qdrantConfig, mcpServer = null, f
 
       const start = Date.now();
       console.log(`[omnicode] index: storing batch of ${currentChunks.length} chunks (${filesProcessed}/${newFiles.length} files processed)`);
-      
-      await callQdrantStore(currentChunks, env, workerConcurrency, mcpServer);
-      
+
+      await embedAndStore(currentChunks, env);
+
       const duration = Date.now() - start;
       console.log(`[omnicode] index: batch complete in ${duration}ms`);
       if (duration > 30000) console.warn(`[omnicode] index: WARNING: batch took > 30s to process!`);
@@ -846,21 +897,20 @@ export async function indexReferences(refsDir, qdrantConfig, mcpServer = null, f
       await saveIndexState(stateFile, state);
     };
 
-    const CONCURRENCY_LIMIT = workerConcurrency;
     const workers = [];
     let fileIndex = 0;
 
     const processNextFile = async () => {
       while (fileIndex < newFiles.length) {
-        if (cancelled || (mcpServer && mcpServer.closed)) break;
+        if (cancelled) break;
         const file = newFiles[fileIndex++];
         if (!file) continue;
 
         try {
           const fileBuffer = await fsPromises.readFile(file.path);
-          await new Promise(r => setImmediate(r)); // yield event loop
-          
-          if (cancelled || (mcpServer && mcpServer.closed)) break;
+          await new Promise(r => setImmediate(r));
+
+          if (cancelled) break;
 
           const apiKey = process.env.MINERU_API_KEY;
           const isComplex = isComplexDocument(file.path, fileBuffer);
@@ -868,7 +918,7 @@ export async function indexReferences(refsDir, qdrantConfig, mcpServer = null, f
           if (isComplex && apiKey && !minerUDisabled) {
               const taskPromise = processComplexDocument(fileBuffer, basename(file.path), apiKey)
                   .then(async markdown => {
-                      if (cancelled || (mcpServer && mcpServer.closed)) return;
+                      if (cancelled) return;
                       // Append .md to ensure markdown chunking logic applies
                       let chunks = await chunkWithTreeSitter(markdown, file.path + ".md");
                       let algo = "Tree-sitter (structural)";
@@ -945,7 +995,7 @@ export async function indexReferences(refsDir, qdrantConfig, mcpServer = null, f
       }
     };
 
-    for (let i = 0; i < CONCURRENCY_LIMIT; i++) {
+    for (let i = 0; i < Math.max(1, DEFAULT_INDEX_CONCURRENCY); i++) {
       workers.push(processNextFile());
     }
     await Promise.all(workers);
@@ -965,7 +1015,6 @@ export async function indexReferences(refsDir, qdrantConfig, mcpServer = null, f
   } finally {
     process.off("SIGINT", onSigint);
     if (abortSignal) abortSignal.removeEventListener("abort", onCancel);
-    if (ownsServer) stopMcpServer(mcpServer);
     await saveIndexState(stateFile, state);
     const lockFile = join(qdrantDir, ".indexing");
     try { rmSync(lockFile, { force: true }); } catch {}
