@@ -681,7 +681,10 @@ export function batchEmbedScript(modelName) {
 export async function batchEmbed(texts, env, options = {}) {
   const modelName = options.modelName || FASTEMBED_MODEL_NAME;
   const timeout = options.timeout || 120000;
+  const signal = options.signal || null;
   return new Promise((resolve) => {
+    if (signal && signal.aborted) { resolve([]); return; }
+
     const child = spawn("uvx", ["--from", "mcp-server-qdrant", "python3", "-c", batchEmbedScript(modelName)], {
       env: { ...process.env, ...env, FASTEMBED_CACHE_PATH: env.FASTEMBED_CACHE_PATH || getFastEmbedCacheDir() },
       stdio: ["pipe", "pipe", "pipe"],
@@ -693,11 +696,16 @@ export async function batchEmbed(texts, env, options = {}) {
     child.stderr.on("data", (d) => { stderr += d.toString(); });
 
     const timer = setTimeout(() => { child.kill(); }, timeout);
+    const onAbort = () => { child.kill(); };
+    if (signal) signal.addEventListener("abort", onAbort, { once: true });
 
     child.on("close", (code) => {
       clearTimeout(timer);
+      if (signal) signal.removeEventListener("abort", onAbort);
       if (code !== 0 || !stdout.trim()) {
-        console.warn(`[omnicode] index: embedding failed — ${stderr.trim().split("\n").pop() || `exit code ${code}`}`);
+        if (!(signal && signal.aborted)) {
+          console.warn(`[omnicode] index: embedding failed — ${stderr.trim().split("\n").pop() || `exit code ${code}`}`);
+        }
         resolve([]);
         return;
       }
@@ -711,6 +719,7 @@ export async function batchEmbed(texts, env, options = {}) {
 
     child.on("error", (err) => {
       clearTimeout(timer);
+      if (signal) signal.removeEventListener("abort", onAbort);
       console.warn(`[omnicode] index: embedding failed — ${err.message}`);
       resolve([]);
     });
@@ -766,7 +775,7 @@ export async function upsertQdrantPoints(collectionName, points) {
   }
 }
 
-export async function embedAndStore(chunks, env) {
+export async function embedAndStore(chunks, env, signal = null) {
   const collectionName = env.COLLECTION_NAME;
   if (!collectionName) {
     console.error("[omnicode] index: COLLECTION_NAME is required");
@@ -779,7 +788,7 @@ export async function embedAndStore(chunks, env) {
   if (storeChunks.length === 0) return [];
 
   const texts = storeChunks.map((c) => c.text);
-  const vectors = await batchEmbed(texts, env);
+  const vectors = await batchEmbed(texts, env, { signal });
   if (vectors.length === 0) {
     console.warn("[omnicode] index: no embeddings returned, skipping storage");
     return [];
@@ -901,7 +910,7 @@ export async function indexReferences(refsDir, qdrantConfig, _mcpServer = null, 
       const start = Date.now();
       console.log(`[omnicode] index: storing batch of ${currentChunks.length} chunks (${filesProcessed}/${newFiles.length} files processed)`);
 
-      await embedAndStore(currentChunks, env);
+      await embedAndStore(currentChunks, env, abortSignal);
 
       const duration = Date.now() - start;
       console.log(`[omnicode] index: batch complete in ${duration}ms`);
