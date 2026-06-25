@@ -74,7 +74,7 @@ describe("omnicode.js CLI integration", () => {
 
 describe("parseArgs", () => {
   it("returns null sessionId when no -s is given", () => {
-    assert.deepEqual(parseArgs(["node", "omnicode.js"]), { sessionId: null, continueSession: false, index: false, forceReindex: false });
+    assert.deepEqual(parseArgs(["node", "omnicode.js"]), { sessionId: null, continueSession: false, index: false, forceReindex: false, indexStatus: false });
   });
 
   it("parses -s <id>", () => {
@@ -83,6 +83,7 @@ describe("parseArgs", () => {
       continueSession: false,
       index: false,
       forceReindex: false,
+      indexStatus: false,
     });
   });
 
@@ -92,11 +93,12 @@ describe("parseArgs", () => {
       continueSession: false,
       index: false,
       forceReindex: false,
+      indexStatus: false,
     });
   });
 
   it("parses -c", () => {
-    assert.deepEqual(parseArgs(["node", "omnicode.js", "-c"]), { sessionId: null, continueSession: true, index: false, forceReindex: false });
+    assert.deepEqual(parseArgs(["node", "omnicode.js", "-c"]), { sessionId: null, continueSession: true, index: false, forceReindex: false, indexStatus: false });
   });
 });
 

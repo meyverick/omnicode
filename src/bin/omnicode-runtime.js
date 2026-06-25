@@ -138,7 +138,8 @@ async function stopOmnirouteIfIdle(pidFile) {
   }
 }
 
-export async function runRuntime(mode) {
+export async function runRuntime(mode, options = {}) {
+  const dryRunIndex = options.dryRunIndex || false;
   const dataDir = getDataDir();
   mkdirSync(dataDir, { recursive: true, mode: 0o700 });
 
@@ -196,11 +197,22 @@ export async function runRuntime(mode) {
       console.log("[omnicode] background indexing is already running, skipping");
     } else {
       startedIndexing = true;
-      console.log("[omnicode] background indexing started");
-      indexReferences(refsDir, qdrantConfig, null, false, ac.signal).catch((err) => {
+      if (dryRunIndex) {
+        console.log("[omnicode] computing index status...");
+      } else {
+        console.log("[omnicode] background indexing started");
+      }
+      indexReferences(refsDir, qdrantConfig, null, false, ac.signal, { dryRun: dryRunIndex }).catch((err) => {
         console.error(`[omnicode] background index failed: ${err.message}`);
       });
     }
+  }
+
+  if (dryRunIndex) {
+    await new Promise((resolve) => setTimeout(resolve, 5000));
+    ac.abort();
+    await cleanup();
+    return;
   }
 
   const launchOpencode = () => new Promise((resolve) => {

@@ -1,11 +1,11 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, statSync, utimesSync } from "node:fs";
 import os from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { commandExists, getDataDir, getOpencodeDbPath, isProcessRunningAsync, generateQdrantConfig, ensureOpencodeConfig, ensureQdrantAgentInstructions, ensureGraymatterAgentInstructions, detectQdrantMcp, walkReferencesAsync, chunkFile, loadIndexState, saveIndexState, getFastEmbedCacheDir, getFastEmbedModelPath, getQdrantStoreEnv, startMcpServer, stopMcpServer, callQdrantStore, embedAndStore, batchEmbed, ensureQdrantCollection, upsertQdrantPoints, indexReferences } from "../src/installer/lib.js";
+import { commandExists, getDataDir, getOpencodeDbPath, isProcessRunningAsync, generateQdrantConfig, ensureOpencodeConfig, ensureQdrantAgentInstructions, ensureGraymatterAgentInstructions, detectQdrantMcp, walkReferencesAsync, chunkFile, loadIndexState, saveIndexState, getFastEmbedCacheDir, getFastEmbedModelPath, getQdrantStoreEnv, startMcpServer, stopMcpServer, callQdrantStore, embedAndStore, batchEmbed, ensureQdrantCollection, upsertQdrantPoints, deleteQdrantPointsBySource, hashFile, indexReferences } from "../src/installer/lib.js";
 
 function createFakeMcpProcess(handler = () => {}) {
   const child = new EventEmitter();
@@ -281,14 +281,134 @@ describe("lib helpers", () => {
 
   it("loadIndexState returns empty object for missing file", () => {
     const state = loadIndexState("/nonexistent/path.json");
-    assert.deepEqual(state, {});
+    assert.equal(state.version, 2);
+    assert.deepEqual(state.files, {});
+    assert.deepEqual(state.submoduleCommits, {});
+  });
+
+  it("loadIndexState migrates old format to new schema", () => {
+    const dir = mkdtempSync(join(os.tmpdir(), "omnicode-state-"));
+    try {
+      const statePath = join(dir, "index.json");
+      writeFileSync(statePath, JSON.stringify({ "/test/file.md": 123456 }), "utf8");
+      const loaded = loadIndexState(statePath);
+      assert.equal(loaded.version, 2);
+      assert.deepEqual(loaded.files, {});
+      assert.ok(existsSync(`${statePath}.v1`));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it("saveIndexState and loadIndexState round-trip", async () => {
     const statePath = join(process.cwd(), ".test-index-state.json");
-    await saveIndexState(statePath, { "/test/file.md": 123456 });
+    const state = {
+      files: { "/test/file.md": { mtimeMs: 123456, hash: "sha256:abc", submoduleCommit: null } },
+      submoduleCommits: {},
+    };
+    await saveIndexState(statePath, state);
     const loaded = loadIndexState(statePath);
-    assert.equal(loaded["/test/file.md"], 123456);
+    assert.equal(loaded.files["/test/file.md"].mtimeMs, 123456);
+    assert.equal(loaded.files["/test/file.md"].hash, "sha256:abc");
+  });
+
+  it("hashFile returns stable sha256 hash", () => {
+    const dir = mkdtempSync(join(os.tmpdir(), "omnicode-hash-"));
+    try {
+      const path = join(dir, "test.txt");
+      writeFileSync(path, "hello world", "utf8");
+      const h1 = hashFile(path);
+      const h2 = hashFile(path);
+      assert.ok(h1.startsWith("sha256:"));
+      assert.equal(h1, h2);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("deleteQdrantPointsBySource returns false on connection failure", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () => { throw new Error("connection refused"); };
+    try {
+      const result = await deleteQdrantPointsBySource("test-collection", ["/a.md", "/b.md"]);
+      assert.equal(result, false);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("deleteQdrantPointsBySource batches large deletion sets", async () => {
+    const originalFetch = globalThis.fetch;
+    const calls = [];
+    globalThis.fetch = async (url, init) => {
+      calls.push({ url, body: JSON.parse(init.body) });
+      return { ok: true };
+    };
+    try {
+      const sources = Array.from({ length: 250 }, (_, i) => `/file${i}.md`);
+      const result = await deleteQdrantPointsBySource("test-collection", sources);
+      assert.equal(result, true);
+      assert.equal(calls.length, 3);
+      assert.equal(calls[0].body.filter.must[0].match.any.length, 100);
+      assert.equal(calls[1].body.filter.must[0].match.any.length, 100);
+      assert.equal(calls[2].body.filter.must[0].match.any.length, 50);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("indexReferences dry-run returns change summary without writing", async () => {
+    const refsDir = mkdtempSync(join(os.tmpdir(), "omnicode-test-refs-"));
+    const cwdSpy = process.cwd;
+    process.cwd = () => refsDir;
+
+    try {
+      writeFileSync(join(refsDir, "file1.md"), "# File 1\nContent 1\n", "utf8");
+      const result = await indexReferences(refsDir, generateQdrantConfig(), null, false, null, { dryRun: true });
+      assert.equal(result.new, 1);
+      assert.equal(result.modified, 0);
+      assert.equal(result.deleted, 0);
+      assert.equal(result.unchanged, 0);
+      assert.equal(existsSync(join(refsDir, ".qdrant", "index.json")), false);
+    } finally {
+      process.cwd = cwdSpy;
+      rmSync(refsDir, { recursive: true, force: true });
+    }
+  });
+
+  it("indexReferences detects modified file with unchanged mtime", async () => {
+    const refsDir = mkdtempSync(join(os.tmpdir(), "omnicode-test-refs-"));
+    const cwdSpy = process.cwd;
+    process.cwd = () => refsDir;
+
+    try {
+      const filePath = join(refsDir, "file1.md");
+      writeFileSync(filePath, "# File 1\nContent 1\n", "utf8");
+
+      const cfg = generateQdrantConfig();
+      await indexReferences(refsDir, cfg, null, false, null, { dryRun: true });
+
+      await new Promise((r) => setTimeout(r, 50));
+      const statePath = join(refsDir, ".qdrant", "index.json");
+      const state = {
+        version: 2,
+        files: { [filePath]: { mtimeMs: Date.now(), hash: "sha256:oldhash", submoduleCommit: null } },
+        submoduleCommits: {},
+      };
+      await saveIndexState(statePath, state);
+
+      writeFileSync(filePath, "# File 1\nModified content\n", "utf8");
+      utimesSync(filePath, new Date(), new Date(state.files[filePath].mtimeMs));
+
+      const result = await indexReferences(refsDir, cfg, null, false, null, { dryRun: true });
+      assert.equal(result.new, 0);
+      assert.equal(result.modified, 1);
+      assert.equal(result.deleted, 0);
+      assert.equal(result.unchanged, 0);
+    } finally {
+      process.cwd = cwdSpy;
+      rmSync(refsDir, { recursive: true, force: true });
+    }
   });
 
   it("survives rapid MCP server start/stop cycles", async () => {

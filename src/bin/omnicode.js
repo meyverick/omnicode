@@ -25,7 +25,7 @@ try {
 }
 
 export function printUsage() {
-  console.log(`Usage: omnicode [-s <session_id>] [-c] [--status] [--version] [index]`);
+  console.log(`Usage: omnicode [-s <session_id>] [-c] [--status] [--version] [--index-status] [index]`);
 }
 
 let _cachedVersion = null;
@@ -60,6 +60,7 @@ export function parseArgs(argv) {
   let continueSession = false;
   let index = false;
   let forceReindex = false;
+  let indexStatus = false;
   for (let i = 2; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === "-h" || arg === "--help") {
@@ -80,6 +81,10 @@ export function parseArgs(argv) {
     }
     if (arg === "--force-reindex") {
       forceReindex = true;
+      continue;
+    }
+    if (arg === "--index-status") {
+      indexStatus = true;
       continue;
     }
     if (arg === "--index" || arg === "index") {
@@ -113,7 +118,7 @@ export function parseArgs(argv) {
       process.exit(2);
     }
   }
-  return { sessionId, continueSession, index, forceReindex };
+  return { sessionId, continueSession, index, forceReindex, indexStatus };
 }
 
 export async function getLatestSessionId(directory = realpathSync(process.cwd())) {
@@ -148,19 +153,22 @@ async function main() {
     process.exit(success ? 0 : 1);
   }
 
-  if (args.index) {
+  if (args.index || args.indexStatus) {
     if (!detectQdrantMcp()) {
       console.error("[omnicode] ERROR: uvx mcp-server-qdrant not found. Install uvx first.");
       process.exit(1);
     }
-    if (isQdrantRunning()) {
+    if (args.index && isQdrantRunning()) {
       console.error("[omnicode] ERROR: a qdrant MCP server is already running for this project.");
       console.error("[omnicode]        Close the opencode session first, or wait for indexing to finish.");
       process.exit(1);
     }
     const qdrantConfig = generateQdrantConfig();
     ensureOpencodeConfig(qdrantConfig);
-    await indexReferences(join(process.cwd(), "references"), qdrantConfig, null, args.forceReindex);
+    const result = await indexReferences(join(process.cwd(), "references"), qdrantConfig, null, args.forceReindex, null, { dryRun: args.indexStatus });
+    if (args.indexStatus) {
+      console.log(`[omnicode] index status: ${result.new} new, ${result.modified} modified, ${result.deleted} deleted, ${result.unchanged} unchanged`);
+    }
     process.exit(0);
   }
 
@@ -172,7 +180,7 @@ async function main() {
   }
 
   const mode = await resolveSessionMode(args.sessionId);
-  await runRuntime(mode);
+  await runRuntime(mode, { dryRunIndex: args.indexStatus });
 }
 
 function isMainModule() {

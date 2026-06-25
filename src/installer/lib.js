@@ -1,10 +1,10 @@
 import { spawn, execFileSync, execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync, rmSync, unlinkSync, promises as fsPromises } from "node:fs";
-import { join, basename, dirname, extname } from "node:path";
+import { join, basename, dirname, extname, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import os from "node:os";
-import { randomUUID } from "node:crypto";
+import { randomUUID, createHash } from "node:crypto";
 import { processComplexDocument } from "./mineru-client.js";
 import { chunkWithTreeSitter } from "./tree-sitter.js";
 
@@ -671,18 +671,68 @@ export function chunkFile(content, filePath) {
   return finalChunks;
 }
 
+const INDEX_STATE_VERSION = 2;
+const DELETE_BATCH_SIZE = 100;
+
 export function loadIndexState(statePath) {
+  let raw;
   try {
-    return JSON.parse(readFileSync(statePath, "utf8"));
+    raw = JSON.parse(readFileSync(statePath, "utf8"));
   } catch {
-    return {};
+    return { version: INDEX_STATE_VERSION, files: {}, submoduleCommits: {} };
   }
+
+  if (!raw || typeof raw !== "object" || raw.version !== INDEX_STATE_VERSION) {
+    const backupPath = `${statePath}.v1`;
+    try {
+      writeFileSync(backupPath, JSON.stringify(raw, null, 2) + "\n", "utf8");
+      console.log(`[omnicode] index: backed up old state to ${backupPath}`);
+    } catch (err) {
+      console.warn(`[omnicode] index: could not back up old state — ${err.message}`);
+    }
+    return { version: INDEX_STATE_VERSION, files: {}, submoduleCommits: {} };
+  }
+
+  return {
+    version: raw.version,
+    files: raw.files || {},
+    submoduleCommits: raw.submoduleCommits || {},
+  };
 }
 
 export async function saveIndexState(statePath, state) {
+  const toWrite = {
+    version: INDEX_STATE_VERSION,
+    files: state.files || {},
+    submoduleCommits: state.submoduleCommits || {},
+  };
   const tmpPath = `${statePath}.${randomUUID()}.tmp`;
-  await fsPromises.writeFile(tmpPath, JSON.stringify(state, null, 2) + "\n", "utf8");
+  await fsPromises.writeFile(tmpPath, JSON.stringify(toWrite, null, 2) + "\n", "utf8");
   await fsPromises.rename(tmpPath, statePath);
+}
+
+export function hashFile(path) {
+  const hash = createHash("sha256");
+  hash.update(readFileSync(path));
+  return `sha256:${hash.digest("hex")}`;
+}
+
+export function getSubmoduleCommit(submodulePath) {
+  try {
+    const commit = execFileSync("git", ["rev-parse", "HEAD"], { cwd: submodulePath, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+    return commit.trim();
+  } catch {
+    return null;
+  }
+}
+
+export function resolveSubmoduleForFile(filePath, refsDir) {
+  const rel = relative(refsDir, filePath);
+  const firstSegment = rel.split(sep)[0];
+  if (!firstSegment) return null;
+  const candidate = join(refsDir, firstSegment);
+  if (existsSync(join(candidate, ".git"))) return candidate;
+  return null;
 }
 
 export function batchEmbedScript(modelName) {
@@ -831,24 +881,55 @@ export async function embedAndStore(chunks, env, signal = null) {
   return allIds.map((id, idx) => ({ chunk: storeChunks[idx].text.substring(0, 80), stored: true }));
 }
 
+export async function deleteQdrantPointsBySource(collectionName, sources) {
+  try {
+    for (let i = 0; i < sources.length; i += DELETE_BATCH_SIZE) {
+      const batch = sources.slice(i, i + DELETE_BATCH_SIZE);
+      const body = {
+        filter: {
+          must: [
+            { key: "source", match: { any: batch } },
+          ],
+        },
+      };
+      const res = await fetch(`http://localhost:6333/collections/${encodeURIComponent(collectionName)}/points/delete`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        console.warn(`[omnicode] index: failed to delete points — ${res.status}: ${await res.text()}`);
+        return false;
+      }
+    }
+    return true;
+  } catch (err) {
+    console.warn(`[omnicode] index: qdrant server not reachable during deletion — ${err.message}`);
+    return false;
+  }
+}
+
 export async function callQdrantStore(chunks, env, _concurrency = DEFAULT_INDEX_CONCURRENCY, _mcpServer = null) {
   return embedAndStore(chunks, env);
 }
 
-export async function indexReferences(refsDir, qdrantConfig, _mcpServer = null, forceReindex = false, abortSignal = null) {
+
+
+export async function indexReferences(refsDir, qdrantConfig, _mcpServer = null, forceReindex = false, abortSignal = null, options = {}) {
+  const dryRun = options.dryRun || false;
   const qdrantDir = join(process.cwd(), ".qdrant");
-  
-  if (forceReindex) {
+
+  if (forceReindex && !dryRun) {
     console.log("[omnicode] index: forcing full reindex, clearing .qdrant directory...");
     try { rmSync(qdrantDir, { recursive: true, force: true }); } catch {}
   }
-  
+
   const stateFile = join(qdrantDir, "index.json");
   const state = loadIndexState(stateFile);
 
   if (!existsSync(refsDir)) {
     console.log("[omnicode] index: no references/ folder found");
-    return;
+    return { new: 0, modified: 0, deleted: 0, unchanged: 0 };
   }
 
   const files = [];
@@ -858,23 +939,75 @@ export async function indexReferences(refsDir, qdrantConfig, _mcpServer = null, 
     currentPaths.add(file.path);
   }
 
-  let stateChanged = false;
-  for (const path of Object.keys(state)) {
-    if (!currentPaths.has(path)) {
-      delete state[path];
-      stateChanged = true;
+  const submoduleCommits = new Map();
+  for (const file of files) {
+    const submodulePath = resolveSubmoduleForFile(file.path, refsDir);
+    if (submodulePath && !submoduleCommits.has(submodulePath)) {
+      const commit = getSubmoduleCommit(submodulePath);
+      if (commit) submoduleCommits.set(submodulePath, commit);
     }
   }
-  if (stateChanged) await saveIndexState(stateFile, state);
 
-  const newFiles = files.filter((f) => (state[f.path] || 0) < f.mtimeMs);
+  const newFiles = [];
+  const modifiedFiles = [];
+  const unchangedFiles = [];
 
-  if (newFiles.length === 0) {
-    console.log("[omnicode] index: all files up to date");
-    return;
+  for (const file of files) {
+    const stored = state.files[file.path];
+    const submodulePath = resolveSubmoduleForFile(file.path, refsDir);
+    const currentCommit = submodulePath ? submoduleCommits.get(submodulePath) || null : null;
+    const submoduleName = submodulePath ? relative(process.cwd(), submodulePath) : null;
+    const storedSubmoduleCommit = submoduleName ? (state.submoduleCommits || {})[submoduleName] : null;
+
+    if (!stored) {
+      newFiles.push(file);
+      continue;
+    }
+
+    let isModified = false;
+    if (stored.mtimeMs !== file.mtimeMs) {
+      isModified = true;
+    }
+    if (!isModified) {
+      const currentHash = hashFile(file.path);
+      if (stored.hash !== currentHash) isModified = true;
+    }
+    if (!isModified && submoduleName && storedSubmoduleCommit && currentCommit && storedSubmoduleCommit !== currentCommit) {
+      isModified = true;
+    }
+
+    if (isModified) {
+      modifiedFiles.push(file);
+    } else {
+      unchangedFiles.push(file);
+    }
   }
 
-  console.log(`[omnicode] index: ${newFiles.length} files to index`);
+  const deletedPaths = Object.keys(state.files).filter((p) => !currentPaths.has(p));
+
+  console.log(`[omnicode] index: ${newFiles.length} new, ${modifiedFiles.length} modified, ${deletedPaths.length} deleted, ${unchangedFiles.length} unchanged`);
+
+  if (dryRun) {
+    return { new: newFiles.length, modified: modifiedFiles.length, deleted: deletedPaths.length, unchanged: unchangedFiles.length };
+  }
+
+  if (newFiles.length === 0 && modifiedFiles.length === 0 && deletedPaths.length === 0) {
+    console.log("[omnicode] index: all files up to date");
+    return { new: 0, modified: 0, deleted: 0, unchanged: unchangedFiles.length };
+  }
+
+  const env = getQdrantStoreEnv(qdrantConfig);
+  const collectionName = env.COLLECTION_NAME;
+  if (deletedPaths.length > 0 && collectionName) {
+    console.log(`[omnicode] index: cleaning up ${deletedPaths.length} deleted file(s)`);
+    const deleted = await deleteQdrantPointsBySource(collectionName, deletedPaths);
+    if (deleted) {
+      for (const p of deletedPaths) delete state.files[p];
+      await saveIndexState(stateFile, state);
+    } else {
+      console.warn("[omnicode] index: deletion cleanup failed, will retry next startup");
+    }
+  }
 
   const isMemoryPressure = !warnIfMemoryPressure();
   if (isMemoryPressure) {
@@ -895,10 +1028,11 @@ export async function indexReferences(refsDir, qdrantConfig, _mcpServer = null, 
     abortSignal.addEventListener("abort", onCancel);
   }
 
+  const filesToIndex = [...newFiles, ...modifiedFiles];
+
   try {
     const lockFile = join(qdrantDir, ".indexing");
     try { writeFileSync(lockFile, "1"); } catch {}
-    const env = getQdrantStoreEnv(qdrantConfig);
     let totalStored = 0;
     let filesProcessed = 0;
 
@@ -919,28 +1053,41 @@ export async function indexReferences(refsDir, qdrantConfig, _mcpServer = null, 
       batchBytes = 0;
 
       const start = Date.now();
-      console.log(`[omnicode] index: storing batch of ${currentChunks.length} chunks (${filesProcessed}/${newFiles.length} files processed)`);
+      console.log(`[omnicode] index: storing batch of ${currentChunks.length} chunks (${filesProcessed}/${filesToIndex.length} files processed)`);
 
-      await embedAndStore(currentChunks, env, abortSignal);
+      const storedIds = await embedAndStore(currentChunks, env, abortSignal);
 
       const duration = Date.now() - start;
-      console.log(`[omnicode] index: batch complete in ${duration}ms`);
-      if (duration > 30000) console.warn(`[omnicode] index: WARNING: batch took > 30s to process!`);
+      console.log(`[omnicode] index: batch complete in ${duration}ms (${storedIds.length} chunks stored)`);
+      if (duration > 30000) console.warn("[omnicode] index: WARNING: batch took > 30s to process!");
 
-      totalStored += currentChunks.length;
-      for (const file of currentFiles) {
-        state[file.path] = file.mtimeMs;
+      if (storedIds.length > 0) {
+        totalStored += currentChunks.length;
+        for (const file of currentFiles) {
+          const submodulePath = resolveSubmoduleForFile(file.path, refsDir);
+          const submoduleName = submodulePath ? relative(process.cwd(), submodulePath) : null;
+          state.files[file.path] = {
+            mtimeMs: file.mtimeMs,
+            hash: hashFile(file.path),
+            submoduleCommit: submoduleName ? submoduleCommits.get(submodulePath) || null : null,
+          };
+          if (submoduleName && submoduleCommits.has(submodulePath)) {
+            state.submoduleCommits[submoduleName] = submoduleCommits.get(submodulePath);
+          }
+        }
+        await saveIndexState(stateFile, state);
+      } else {
+        console.warn(`[omnicode] index: batch storage failed, state not updated for ${currentFiles.length} file(s)`);
       }
-      await saveIndexState(stateFile, state);
     };
 
     const workers = [];
     let fileIndex = 0;
 
     const processNextFile = async () => {
-      while (fileIndex < newFiles.length) {
+      while (fileIndex < filesToIndex.length) {
         if (cancelled) break;
-        const file = newFiles[fileIndex++];
+        const file = filesToIndex[fileIndex++];
         if (!file) continue;
 
         try {
@@ -952,11 +1099,22 @@ export async function indexReferences(refsDir, qdrantConfig, _mcpServer = null, 
           const apiKey = process.env.MINERU_API_KEY;
           const isComplex = isComplexDocument(file.path, fileBuffer);
 
+          const addChunks = async (chunks, sourcePath, via = "local") => {
+            for (const c of chunks) {
+              batchChunks.push({ path: sourcePath, text: c });
+              batchBytes += Buffer.byteLength(c, "utf8");
+            }
+            batchFiles.push(file);
+            filesProcessed++;
+            if (batchFiles.length >= 100 || batchBytes > 20_000_000) {
+              await flushBatch();
+            }
+          };
+
           if (isComplex && apiKey && !minerUDisabled) {
               const taskPromise = processComplexDocument(fileBuffer, basename(file.path), apiKey)
                   .then(async markdown => {
                       if (cancelled) return;
-                      // Append .md to ensure markdown chunking logic applies
                       let chunks = await chunkWithTreeSitter(markdown, file.path + ".md");
                       let algo = "Tree-sitter (structural)";
                       if (!chunks) {
@@ -964,15 +1122,7 @@ export async function indexReferences(refsDir, qdrantConfig, _mcpServer = null, 
                         algo = "Linear (sequential)";
                       }
                       console.log(`[omnicode] Indexed: ${file.path} (via MinerU) using ${algo} chunking`);
-                      for (const c of chunks) {
-                          batchChunks.push({ path: file.path, text: c });
-                          batchBytes += Buffer.byteLength(c, "utf8");
-                      }
-                      batchFiles.push(file);
-                      filesProcessed++;
-                      if (batchFiles.length >= 100 || batchBytes > 20_000_000) {
-                        await flushBatch();
-                      }
+                      await addChunks(chunks, file.path, "MinerU");
                   })
                   .catch(async err => {
                       if (err.status === 401 || err.status === 402) {
@@ -981,7 +1131,6 @@ export async function indexReferences(refsDir, qdrantConfig, _mcpServer = null, 
                       } else {
                           console.warn(`[omnicode] index: MinerU API failed for ${file.path}, falling back to local chunking: ${err.message}`);
                       }
-                      // Fallback to local
                       const isBinaryDoc = BINARY_DOC_EXTENSIONS.has(extname(file.path).toLowerCase());
                       const contentStr = isBinaryDoc ? "Binary Content Placeholder" : fileBuffer.toString("utf8");
                       let chunks = await chunkWithTreeSitter(contentStr, file.path);
@@ -991,22 +1140,13 @@ export async function indexReferences(refsDir, qdrantConfig, _mcpServer = null, 
                         algo = "Linear (sequential)";
                       }
                       console.log(`[omnicode] Indexed: ${file.path} (local fallback) using ${algo} chunking`);
-                      for (const c of chunks) {
-                          batchChunks.push({ path: file.path, text: c });
-                          batchBytes += Buffer.byteLength(c, "utf8");
-                      }
-                      batchFiles.push(file);
-                      filesProcessed++;
-                      if (batchFiles.length >= 100 || batchBytes > 20_000_000) {
-                        await flushBatch();
-                      }
+                      await addChunks(chunks, file.path, "local fallback");
                   });
-              
+
               activeMinerUTasks.push(taskPromise);
               continue;
           }
 
-          // Standard processing for non-complex or if API missing/disabled
           const isBinaryDoc = BINARY_DOC_EXTENSIONS.has(extname(file.path).toLowerCase());
           const content = isBinaryDoc ? "Binary Content Placeholder" : fileBuffer.toString("utf8");
           let chunks = await chunkWithTreeSitter(content, file.path);
@@ -1016,16 +1156,7 @@ export async function indexReferences(refsDir, qdrantConfig, _mcpServer = null, 
             algo = "Linear (sequential)";
           }
           console.log(`[omnicode] Indexed: ${file.path} using ${algo} chunking`);
-          for (const c of chunks) {
-            batchChunks.push({ path: file.path, text: c });
-            batchBytes += Buffer.byteLength(c, "utf8");
-          }
-          batchFiles.push(file);
-          filesProcessed++;
-
-          if (batchFiles.length >= 100 || batchBytes > 20_000_000) {
-            await flushBatch();
-          }
+          await addChunks(chunks, file.path, "local");
         } catch (err) {
           console.warn(`[omnicode] index: skipping ${file.path} — ${err.message}`);
         }
@@ -1036,12 +1167,11 @@ export async function indexReferences(refsDir, qdrantConfig, _mcpServer = null, 
       workers.push(processNextFile());
     }
     await Promise.all(workers);
-    
-    // Wait for any remaining asynchronous MinerU tasks to resolve before final flush
+
     await Promise.allSettled(activeMinerUTasks);
 
     if (!cancelled) await flushBatch();
-    
+
     if (cancelled) {
       console.log("[omnicode] index: aborted by user");
     } else {
@@ -1056,4 +1186,6 @@ export async function indexReferences(refsDir, qdrantConfig, _mcpServer = null, 
     const lockFile = join(qdrantDir, ".indexing");
     try { rmSync(lockFile, { force: true }); } catch {}
   }
+
+  return { new: newFiles.length, modified: modifiedFiles.length, deleted: deletedPaths.length, unchanged: unchangedFiles.length };
 }
