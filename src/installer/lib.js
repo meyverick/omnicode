@@ -18,7 +18,10 @@ const DEFAULT_INDEX_CONCURRENCY = Math.max(1, Math.floor(os.cpus().length * 0.25
 const FASTEMBED_WARMUP_SCRIPT = `from fastembed import TextEmbedding; list(TextEmbedding('${FASTEMBED_MODEL_NAME}').passage_embed(['warmup']))`;
 const QDRANT_INSTRUCTIONS_BEGIN = "<!-- qdrant:instructions:begin";
 const QDRANT_INSTRUCTIONS_END = "<!-- qdrant:instructions:end -->";
-const QDRANT_AGENTS_TEMPLATE = readFileSync(join(__dirname, "AGENTS.template.md"), "utf8").trim() + "\n";
+const QDRANT_AGENTS_TEMPLATE = readFileSync(join(__dirname, "QDRANT.md"), "utf8").trim() + "\n";
+const GRAYMATTER_INSTRUCTIONS_BEGIN = "<!-- graymatter_cli:instructions:begin";
+const GRAYMATTER_INSTRUCTIONS_END = "<!-- graymatter_cli:instructions:end -->";
+const GRAYMATTER_AGENTS_TEMPLATE = readFileSync(join(__dirname, "GRAYMATTER.md"), "utf8").trim() + "\n";
 
 export function commandExists(command) {
   const tool = isWindows ? "where" : "which";
@@ -273,15 +276,15 @@ export function ensureOpencodeConfig(qdrantConfig) {
   writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n", "utf8");
 }
 
-export function ensureQdrantAgentInstructions(agentsPath = join(process.cwd(), "AGENTS.md"), template = QDRANT_AGENTS_TEMPLATE) {
+function ensureManagedBlock(agentsPath, template, beginMarker, endMarker) {
   if (!existsSync(agentsPath)) {
     writeFileSync(agentsPath, template, "utf8");
     return;
   }
 
   const current = readFileSync(agentsPath, "utf8");
-  const beginIndex = current.indexOf(QDRANT_INSTRUCTIONS_BEGIN);
-  const endIndex = current.indexOf(QDRANT_INSTRUCTIONS_END);
+  const beginIndex = current.indexOf(beginMarker);
+  const endIndex = current.indexOf(endMarker);
 
   if (beginIndex === -1 || endIndex === -1 || endIndex < beginIndex) {
     const separator = current.endsWith("\n") ? "\n" : "\n\n";
@@ -289,9 +292,17 @@ export function ensureQdrantAgentInstructions(agentsPath = join(process.cwd(), "
     return;
   }
 
-  const endOfBlock = endIndex + QDRANT_INSTRUCTIONS_END.length;
+  const endOfBlock = endIndex + endMarker.length;
   const next = current.slice(0, beginIndex) + template.trimEnd() + current.slice(endOfBlock);
   writeFileSync(agentsPath, next.endsWith("\n") ? next : `${next}\n`, "utf8");
+}
+
+export function ensureQdrantAgentInstructions(agentsPath = join(process.cwd(), "AGENTS.md"), template = QDRANT_AGENTS_TEMPLATE) {
+  ensureManagedBlock(agentsPath, template, QDRANT_INSTRUCTIONS_BEGIN, QDRANT_INSTRUCTIONS_END);
+}
+
+export function ensureGraymatterAgentInstructions(agentsPath = join(process.cwd(), "AGENTS.md"), template = GRAYMATTER_AGENTS_TEMPLATE) {
+  ensureManagedBlock(agentsPath, template, GRAYMATTER_INSTRUCTIONS_BEGIN, GRAYMATTER_INSTRUCTIONS_END);
 }
 
 export function getDataDir() {

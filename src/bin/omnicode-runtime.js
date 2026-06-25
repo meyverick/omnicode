@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync, writeFileSync, writeSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 
-import { commandExists, getDataDir, isPidAlive, isProcessRunningAsync, detectQdrantMcp, generateQdrantConfig, ensureOpencodeConfig, ensureQdrantAgentInstructions, indexReferences, startMcpServer, stopMcpServer, getQdrantStoreEnv, getQdrantPidFile, isQdrantRunning, startQdrantContainer, stopQdrantContainer } from "../installer/lib.js";
+import { commandExists, getDataDir, isPidAlive, isProcessRunningAsync, detectQdrantMcp, generateQdrantConfig, ensureOpencodeConfig, ensureQdrantAgentInstructions, ensureGraymatterAgentInstructions, indexReferences, startMcpServer, stopMcpServer, getQdrantStoreEnv, getQdrantPidFile, isQdrantRunning, startQdrantContainer, stopQdrantContainer } from "../installer/lib.js";
 
 process.on("unhandledRejection", (err) => {
   console.error("[omnicode] runtime: UNHANDLED REJECTION:", err?.message || err);
@@ -186,6 +186,9 @@ export async function runRuntime(mode) {
     ensureQdrantAgentInstructions();
     console.log("[omnicode] qdrant MCP configured");
   }
+
+  ensureGraymatterAgentInstructions();
+  console.log("[omnicode] graymatter CLI instructions ensured");
 
   const ac = new AbortController();
   if (hasQdrant && existsSync(refsDir) && qdrantConfig) {

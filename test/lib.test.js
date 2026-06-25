@@ -5,7 +5,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import os from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { commandExists, getDataDir, getOpencodeDbPath, isProcessRunningAsync, generateQdrantConfig, ensureOpencodeConfig, ensureQdrantAgentInstructions, detectQdrantMcp, walkReferencesAsync, chunkFile, loadIndexState, saveIndexState, getFastEmbedCacheDir, getFastEmbedModelPath, getQdrantStoreEnv, startMcpServer, stopMcpServer, callQdrantStore, embedAndStore, batchEmbed, ensureQdrantCollection, upsertQdrantPoints, indexReferences } from "../src/installer/lib.js";
+import { commandExists, getDataDir, getOpencodeDbPath, isProcessRunningAsync, generateQdrantConfig, ensureOpencodeConfig, ensureQdrantAgentInstructions, ensureGraymatterAgentInstructions, detectQdrantMcp, walkReferencesAsync, chunkFile, loadIndexState, saveIndexState, getFastEmbedCacheDir, getFastEmbedModelPath, getQdrantStoreEnv, startMcpServer, stopMcpServer, callQdrantStore, embedAndStore, batchEmbed, ensureQdrantCollection, upsertQdrantPoints, indexReferences } from "../src/installer/lib.js";
 
 function createFakeMcpProcess(handler = () => {}) {
   const child = new EventEmitter();
@@ -127,6 +127,63 @@ describe("lib helpers", () => {
       const template = "<!-- qdrant:instructions:begin -->\nNew qdrant instructions\n<!-- qdrant:instructions:end -->\n";
       writeFileSync(agentsPath, "Before\n<!-- qdrant:instructions:begin -->\nOld\n<!-- qdrant:instructions:end -->\nAfter\n", "utf8");
       ensureQdrantAgentInstructions(agentsPath, template);
+      const content = readFileSync(agentsPath, "utf8");
+      assert.ok(content.startsWith("Before\n"));
+      assert.ok(content.endsWith("\nAfter\n"));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("ensureGraymatterAgentInstructions creates AGENTS.md from template", () => {
+    const dir = mkdtempSync(join(os.tmpdir(), "omnicode-agents-"));
+    try {
+      const agentsPath = join(dir, "AGENTS.md");
+      const template = "<!-- graymatter_cli:instructions:begin -->\nGraymatter CLI instructions\n<!-- graymatter_cli:instructions:end -->\n";
+      ensureGraymatterAgentInstructions(agentsPath, template);
+      assert.equal(readFileSync(agentsPath, "utf8"), template);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("ensureGraymatterAgentInstructions appends the graymatter_cli block when missing", () => {
+    const dir = mkdtempSync(join(os.tmpdir(), "omnicode-agents-"));
+    try {
+      const agentsPath = join(dir, "AGENTS.md");
+      const template = "<!-- graymatter_cli:instructions:begin -->\nGraymatter CLI instructions\n<!-- graymatter_cli:instructions:end -->\n";
+      writeFileSync(agentsPath, "# Existing Instructions\n", "utf8");
+      ensureGraymatterAgentInstructions(agentsPath, template);
+      const content = readFileSync(agentsPath, "utf8");
+      assert.ok(content.startsWith("# Existing Instructions\n"));
+      assert.ok(content.includes(template.trim()));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("ensureGraymatterAgentInstructions replaces an existing graymatter_cli block", () => {
+    const dir = mkdtempSync(join(os.tmpdir(), "omnicode-agents-"));
+    try {
+      const agentsPath = join(dir, "AGENTS.md");
+      const template = "<!-- graymatter_cli:instructions:begin -->\nNew graymatter instructions\n<!-- graymatter_cli:instructions:end -->\n";
+      writeFileSync(agentsPath, "Before\n<!-- graymatter_cli:instructions:begin -->\nOld graymatter instructions\n<!-- graymatter_cli:instructions:end -->\nAfter\n", "utf8");
+      ensureGraymatterAgentInstructions(agentsPath, template);
+      const content = readFileSync(agentsPath, "utf8");
+      assert.ok(content.includes("New graymatter instructions"));
+      assert.equal(content.includes("Old graymatter instructions"), false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("ensureGraymatterAgentInstructions preserves content outside the managed block", () => {
+    const dir = mkdtempSync(join(os.tmpdir(), "omnicode-agents-"));
+    try {
+      const agentsPath = join(dir, "AGENTS.md");
+      const template = "<!-- graymatter_cli:instructions:begin -->\nNew graymatter instructions\n<!-- graymatter_cli:instructions:end -->\n";
+      writeFileSync(agentsPath, "Before\n<!-- graymatter_cli:instructions:begin -->\nOld\n<!-- graymatter_cli:instructions:end -->\nAfter\n", "utf8");
+      ensureGraymatterAgentInstructions(agentsPath, template);
       const content = readFileSync(agentsPath, "utf8");
       assert.ok(content.startsWith("Before\n"));
       assert.ok(content.endsWith("\nAfter\n"));

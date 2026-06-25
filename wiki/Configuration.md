@@ -49,7 +49,8 @@ Collection names include a UUID to prevent collisions across projects sharing th
 - `src/bin/omnicode.js` — CLI entrypoint.
 - `src/bin/omnicode-runtime.js` — Node.js runtime (OmniRoute lifecycle, Qdrant container, background indexing).
 - `src/installer/lib.js` — shared helpers (file walking, chunking, MCP lifecycle, state management).
-- `src/installer/AGENTS.template.md` — Qdrant MCP agent instructions.
+- `src/installer/QDRANT.md` — Qdrant MCP agent instructions template.
+- `src/installer/GRAYMATTER.md` — GrayMatter CLI agent instructions template.
 - `src/installer/mineru-client.js` — MinerU OCR client for PDF/image processing.
 - `src/installer/tree-sitter.js` — structural code chunking.
 - `test/` — package tests (65 tests).
