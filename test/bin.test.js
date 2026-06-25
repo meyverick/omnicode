@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { join, dirname } from "node:path";
 
@@ -14,51 +14,51 @@ describe("omnicode.js CLI integration", () => {
   it("fails when a required tool is missing", () => {
     const env = { ...process.env, PATH: "/usr/bin:/bin" };
     assert.throws(
-      () => execSync(`node "${binPath}"`, { env, encoding: "utf8" }),
+      () => execFileSync(process.execPath, [binPath], { env, encoding: "utf8" }),
       /missing required tool\(s\): (opencode|omniroute)/
     );
   });
 
   it("shows usage for --help", () => {
-    const output = execSync(`node "${binPath}" --help`, { encoding: "utf8" });
+    const output = execFileSync(process.execPath, [binPath, "--help"], { encoding: "utf8" });
     assert.ok(output.includes("Usage: omnicode"));
   });
 
   it("shows package version for --version", () => {
-    const output = execSync(`node "${binPath}" --version`, { encoding: "utf8" });
+    const output = execFileSync(process.execPath, [binPath, "--version"], { encoding: "utf8" });
     assert.equal(output.trim(), getVersion());
   });
 
   it("shows process state for --status", () => {
-    const output = execSync(`node "${binPath}" --status`, { encoding: "utf8" });
+    const output = execFileSync(process.execPath, [binPath, "--status"], { encoding: "utf8" });
     assert.match(output, /opencode: (running|stopped)/);
     assert.match(output, /omniroute: (running|stopped)/);
   });
 
   it("rejects -s without a value", () => {
     assert.throws(
-      () => execSync(`node "${binPath}" -s`, { encoding: "utf8" }),
+      () => execFileSync(process.execPath, [binPath, "-s"], { encoding: "utf8" }),
       /-s requires a value/
     );
   });
 
   it("rejects unknown options", () => {
     assert.throws(
-      () => execSync(`node "${binPath}" --bogus`, { encoding: "utf8" }),
+      () => execFileSync(process.execPath, [binPath, "--bogus"], { encoding: "utf8" }),
       /unknown option/
     );
   });
 
   it("rejects invalid session ID format", () => {
     assert.throws(
-      () => execSync(`node "${binPath}" -s 'foo; rm -rf /'`, { encoding: "utf8" }),
+      () => execFileSync(process.execPath, [binPath, "-s", "foo; rm -rf /"], { encoding: "utf8" }),
       /invalid session ID format/
     );
   });
 
   it("rejects session ID with spaces", () => {
     assert.throws(
-      () => execSync(`node "${binPath}" -s 'foo bar'`, { encoding: "utf8" }),
+      () => execFileSync(process.execPath, [binPath, "-s", "foo bar"], { encoding: "utf8" }),
       /invalid session ID format/
     );
   });
@@ -66,7 +66,7 @@ describe("omnicode.js CLI integration", () => {
   it("rejects session ID longer than 128 characters", () => {
     const longId = "a".repeat(129);
     assert.throws(
-      () => execSync(`node "${binPath}" -s ${longId}`, { encoding: "utf8" }),
+      () => execFileSync(process.execPath, [binPath, "-s", longId], { encoding: "utf8" }),
       /invalid session ID format/
     );
   });
