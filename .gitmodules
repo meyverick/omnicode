@@ -13,3 +13,15 @@
 [submodule "references/opencode-omniroute-auth"]
 	path = references/opencode-omniroute-auth
 	url = https://github.com/Alph4d0g/opencode-omniroute-auth.git
+[submodule "references/knowledge-catalog"]
+	path = references/knowledge-catalog
+	url = https://github.com/GoogleCloudPlatform/knowledge-catalog.git
+[submodule "references/mcp-server-qdrant"]
+	path = references/mcp-server-qdrant
+	url = https://github.com/qdrant/mcp-server-qdrant
+[submodule "references/opencode-mem"]
+	path = references/opencode-mem
+	url = https://github.com/tickernelz/opencode-mem.git
+[submodule "references/qdrant"]
+	path = references/qdrant
+	url = https://github.com/qdrant/qdrant.git

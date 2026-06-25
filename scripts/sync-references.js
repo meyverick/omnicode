@@ -28,30 +28,59 @@ function getDefaultBranch(cwd) {
   return null;
 }
 
+function getRemoteUrl(repoPath) {
+  const result = spawnSync("git", ["remote", "get-url", "origin"], { cwd: repoPath, encoding: "utf8" });
+  if (result.status === 0 && result.stdout) return result.stdout.trim();
+  return null;
+}
+
+function isSubmodule(name) {
+  return existsSync(".gitmodules") &&
+    spawnSync("git", ["config", "--file", ".gitmodules", "--get-regexp", `submodule.*${name}.*path`], { encoding: "utf8" }).status === 0;
+}
+
+function registerSubmodule(repoPath) {
+  const name = repoPath.replace(/^\.\/references\//, "");
+  if (isSubmodule(name)) return true;
+
+  const remoteUrl = getRemoteUrl(repoPath);
+  if (!remoteUrl) {
+    console.error(`[sync-references] ${name}: no origin remote found, cannot register as submodule`);
+    return false;
+  }
+
+  console.log(`[sync-references] ${name}: registering as submodule from ${remoteUrl}`);
+
+  // Deinitialize the nested git repo so git can absorb it as a submodule
+  if (!run(repoPath, "git", ["checkout", "."])) return false;
+
+  // Remove the directory from git index without deleting files
+  const rmResult = spawnSync("git", ["rm", "-f", "--cached", repoPath], { encoding: "utf8" });
+  if (rmResult.status !== 0 && rmResult.stderr && !rmResult.stderr.includes("did not match any files")) {
+    console.error(`[sync-references] ${name}: failed to remove from index`);
+    console.error(rmResult.stderr.trim());
+    return false;
+  }
+
+  // Add as submodule
+  if (!run(".", "git", ["submodule", "add", "--force", remoteUrl, repoPath])) {
+    return false;
+  }
+
+  return true;
+}
+
 function syncRepo(repoPath) {
   const name = repoPath.replace(/^\.\/references\//, "");
   console.log(`\n[sync-references] === ${name} ===`);
 
-  const isSubmodule = existsSync(".gitmodules") &&
-    spawnSync("git", ["config", "--file", ".gitmodules", "--get-regexp", `submodule.*${name}.*path`], { encoding: "utf8" }).status === 0;
-
-  if (isSubmodule) {
-    console.log(`[sync-references] ${name}: updating as git submodule`);
-    if (!run(".", "git", ["submodule", "update", "--init", "--remote", "--force", repoPath])) return false;
-    if (!run(repoPath, "git", ["reset", "--hard", "HEAD"])) return false;
-    return true;
+  if (!isSubmodule(name)) {
+    if (!registerSubmodule(repoPath)) return false;
   }
 
-  const branch = getDefaultBranch(repoPath);
-  if (!branch) {
-    console.error(`[sync-references] ${name}: could not determine default branch, skipping`);
-    return false;
-  }
-
-  console.log(`[sync-references] ${name}: fetching origin/${branch}`);
-  if (!run(repoPath, "git", ["fetch", "origin", branch])) return false;
-  if (!run(repoPath, "git", "checkout".split(" ").concat([branch]))) return false;
-  if (!run(repoPath, "git", ["reset", "--hard", `origin/${branch}`])) return false;
+  console.log(`[sync-references] ${name}: updating as git submodule`);
+  if (!run(".", "git", ["submodule", "update", "--init", "--remote", "--force", repoPath])) return false;
+  if (!run(repoPath, "git", ["reset", "--hard", "HEAD"])) return false;
   return true;
 }
 
