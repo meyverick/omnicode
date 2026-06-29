@@ -232,33 +232,23 @@ export function generateQdrantConfig() {
     } catch {}
   }
   const resolvedConcurrency = concurrency ? String(concurrency) : String(DEFAULT_INDEX_CONCURRENCY);
-  
-  let command;
-  if (isWindows) {
-    command = [
-      "cmd.exe",
-      "/c",
-      `set QDRANT_URL=http://localhost:6333&& set COLLECTION_NAME=${collectionName}&& set EMBEDDING_MODEL=${FASTEMBED_MODEL_NAME}&& set FASTEMBED_CACHE_PATH=${cacheDir}&& set OMP_NUM_THREADS=${resolvedConcurrency}&& set ONNXRUNTIME_NUM_THREADS=${resolvedConcurrency}&& set ORT_DEFAULT_NUM_THREADS=${resolvedConcurrency}&& set UV_THREADPOOL_SIZE=${resolvedConcurrency}&& set RAYON_NUM_THREADS=${resolvedConcurrency}&& set INDEXING_CONCURRENCY=${resolvedConcurrency}&& uvx mcp-server-qdrant`
-    ];
-  } else {
-    command = [
-      "sh",
-      "-c",
-      `QDRANT_URL=http://localhost:6333 COLLECTION_NAME=${collectionName} EMBEDDING_MODEL=${FASTEMBED_MODEL_NAME} FASTEMBED_CACHE_PATH=${cacheDir} OMP_NUM_THREADS=${resolvedConcurrency} ONNXRUNTIME_NUM_THREADS=${resolvedConcurrency} ORT_DEFAULT_NUM_THREADS=${resolvedConcurrency} UV_THREADPOOL_SIZE=${resolvedConcurrency} RAYON_NUM_THREADS=${resolvedConcurrency} INDEXING_CONCURRENCY=${resolvedConcurrency} uvx mcp-server-qdrant`
-    ];
-  }
 
   return {
     type: "local",
     enabled: true,
     disabled: false,
-    command,
+    command: ["uvx", "mcp-server-qdrant"],
     env: {
       QDRANT_URL: "http://localhost:6333",
       COLLECTION_NAME: collectionName,
       EMBEDDING_MODEL: FASTEMBED_MODEL_NAME,
       FASTEMBED_CACHE_PATH: cacheDir,
       INDEXING_CONCURRENCY: resolvedConcurrency,
+      OMP_NUM_THREADS: resolvedConcurrency,
+      ONNXRUNTIME_NUM_THREADS: resolvedConcurrency,
+      ORT_DEFAULT_NUM_THREADS: resolvedConcurrency,
+      UV_THREADPOOL_SIZE: resolvedConcurrency,
+      RAYON_NUM_THREADS: resolvedConcurrency,
     },
   };
 }
