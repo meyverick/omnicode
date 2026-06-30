@@ -1,0 +1,4 @@
+## 2025-06-30 - Enforce Synchronous I/O Timeouts
+**Vulnerability:** Node.js Child Process Execution -> DoS via unbound synchronous I/O hanging the event loop.
+**Learning:** `execFileSync` lacks a default timeout. System utilities (`pgrep`, `docker`, `wmic`, `readlink`) can stall indefinitely under resource pressure or network issues, blocking the main thread and causing application-wide DoS. This vulnerability pattern is pervasive where external system dependencies are queried synchronously.
+**Prevention:** Establish a reusable wrapper function for `execFileSync` (`const execFileSync = (cmd, args, opts = {}) => _execFileSync(cmd, args, { timeout: opts.timeout ?? 5000, ...opts });`) that enforces the Fail Securely (FEAR) principle by applying a strict 5-second default timeout, with safe explicit overrides for long-running initialization tasks.

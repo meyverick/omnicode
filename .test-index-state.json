@@ -1,0 +1,11 @@
+{
+  "version": 2,
+  "files": {
+    "/test/file.md": {
+      "mtimeMs": 123456,
+      "hash": "sha256:abc",
+      "submoduleCommit": null
+    }
+  },
+  "submoduleCommits": {}
+}
