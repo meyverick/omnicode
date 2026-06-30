@@ -1,4 +1,4 @@
-import { spawn, execFileSync, execFile } from "node:child_process";
+import { spawn, execFileSync as _execFileSync, execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync, rmSync, unlinkSync, promises as fsPromises } from "node:fs";
 import { join, basename, dirname, extname, relative, sep } from "node:path";
@@ -7,6 +7,15 @@ import os from "node:os";
 import { randomUUID, createHash } from "node:crypto";
 import { processComplexDocument } from "./mineru-client.js";
 import { chunkWithTreeSitter } from "./tree-sitter.js";
+
+// 🛡️ Sentinel: Enforce FEAR principle. Wrap synchronous I/O to prevent DoS via indefinitely hanging child processes.
+const execFileSync = (cmd, argsOrOpts, opts = {}) => {
+  if (!Array.isArray(argsOrOpts)) {
+    opts = argsOrOpts || {};
+    return _execFileSync(cmd, { timeout: opts.timeout ?? 5000, ...opts });
+  }
+  return _execFileSync(cmd, argsOrOpts, { timeout: opts.timeout ?? 5000, ...opts });
+};
 
 const execFileAsync = promisify(execFile);
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -176,7 +185,7 @@ export function countActiveIndexers() {
 export function detectQdrantMcp() {
   if (!commandExists("uvx")) return false;
   try {
-    execFileSync("uvx", ["mcp-server-qdrant", "--help"], { stdio: "ignore" });
+    execFileSync("uvx", ["mcp-server-qdrant", "--help"], { stdio: "ignore", timeout: 30000 });
     return true;
   } catch {
     return false;
@@ -352,7 +361,7 @@ export async function startQdrantContainer() {
   const storagePath = join(getDataDir(), "qdrant-storage");
   try { mkdirSync(storagePath, { recursive: true }); } catch {}
   try {
-    execFileSync("docker", ["run", "-d", "--name", "omnicode-qdrant", "-p", "6333:6333", "-v", `${storagePath}:/qdrant/storage`, "qdrant/qdrant"], { stdio: "ignore" });
+    execFileSync("docker", ["run", "-d", "--name", "omnicode-qdrant", "-p", "6333:6333", "-v", `${storagePath}:/qdrant/storage`, "qdrant/qdrant"], { stdio: "ignore", timeout: 120000 });
     console.log("[omnicode] qdrant container started");
   } catch {
     // might be running already or conflict
